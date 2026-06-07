@@ -80,15 +80,19 @@ firebase deploy --only hosting
 # Functions (Node 20, not 22)
 npm --prefix functions run build && firebase deploy --only functions
 
-# Backend VPS via PM2
-npm run build
-pm2 start ecosystem.config.cjs
+# Backend (Docker Compose — production)
+npm run docker:whatsapp:build   # Build image
+npm run docker:whatsapp:up      # Start container on port 4200
+
+# Or rebuild/restart after code changes:
+docker compose -f docker-compose.whatsapp.yml up -d --build
 ```
 - Functions runtime is Node 20 (`functions/package.json:engines.node`), not root Node 22.
 - Production URL: `https://whatsapp.eburon.ai`.
 - Alternatively deployable via Vercel (`vercel.json`), Render (`render.yaml` — web service runtime Node, health check `/api/health`), or **Dokploy** (`.opencode/skills/dokploy-deploy/SKILL.md` + `docker-compose.dokploy.yml`).
-- In production, Express serves `dist/` static files + SPA fallback.
-- **Dokploy migration planned** — VPS currently runs PM2+Traefik, will migrate to Dokploy (self-hosted PaaS). See skill file for instructions.
+- In production, Express serves `dist/` static files + SPA fallback. Vite dev server on port 3000 runs alongside for frontend development.
+- **Reverse proxy:** NGINX on ports 80/443 with Let's Encrypt, proxies `whatsapp.eburon.ai` → `127.0.0.1:4200` (Docker container). Also proxies `api.eburon.ai`, `opencode.eburon.ai`, `fast.eburon.ai`, `fragments.eburon.ai`.
+- **Docker Compose (recommended):** `docker-compose.whatsapp.yml` uses `Dockerfile.whatsapp` (slim, no Chromium). `docker-compose.dokploy.yml` uses `Dockerfile` (includes Chromium/puppeteer for browser automation).
 
 ### CI
 - `.github/workflows/android-distribution.yml` — On push to `main`: builds web, deploys to Firebase Hosting, builds Android APK via Bubblewrap, uploads to Firebase App Distribution.

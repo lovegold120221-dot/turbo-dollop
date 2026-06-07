@@ -41,7 +41,7 @@ Data Layer
 | **Auth** | Firebase Auth (Google OAuth) |
 | **Database** | Supabase (PostgreSQL + Storage) |
 | **WhatsApp** | Baileys (`@whiskeysockets/baileys`) |
-| **Hosting** | Ubuntu VPS + PM2 + Traefik (or Dokploy alternative) |
+| **Hosting** | Ubuntu VPS + Docker Compose + NGINX (5 domains) |
 
 ---
 
@@ -128,15 +128,25 @@ scripts/
 
 ### VPS (Production — Current)
 ```bash
-npm run build
-pm2 start server/index.ts --interpreter node_modules/.bin/tsx --name voxx-backend
+npm run docker:whatsapp:build
+npm run docker:whatsapp:up
 ```
-Port 4200 behind Traefik reverse proxy with Let's Encrypt. Production URL: `https://whatsapp.eburon.ai`.
+Docker container on port 4200 behind NGINX reverse proxy with Let's Encrypt. Production URL: `https://whatsapp.eburon.ai`.
 
-### Dokploy (Planned Migration)
-See `.opencode/skills/dokploy-deploy/SKILL.md` for full instructions. Deploy via:
+### Docker Compose
+```bash
+# Build and start
+docker compose -f docker-compose.whatsapp.yml up -d --build
+
+# Stop
+docker compose -f docker-compose.whatsapp.yml down
+```
+
+### Dokploy (Alternative)
+See `.opencode/skills/dokploy-deploy/SKILL.md`. Deploy via:
 - **Docker Compose**: Dokploy reads `docker-compose.dokploy.yml` from the repo
 - **Application**: Single service using `Dockerfile`, health check `/api/health`
+Note: Dokploy's Traefik needs ports 80/443 (currently used by NGINX). Not recommended unless you migrate all 5 NGINX domains into Dokploy's ingress.
 
 ### Firebase Hosting (Static Frontend)
 ```bash
