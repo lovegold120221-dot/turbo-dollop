@@ -10,6 +10,7 @@ import {
   generateEburonWorker,
   generateEburonText,
   createEburonClient,
+  resolveEburonModelAlias,
 } from './eburon-provider';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -105,7 +106,12 @@ app.post('/api/eburon/live-session', async (req, res) => {
       return;
     }
 
-    const resolvedModelId = process.env.EBURON_VOICE_MODEL_ID_INTERNAL || '';
+    let resolvedModelId: string | undefined;
+    try {
+      resolvedModelId = resolveEburonModelAlias(alias);
+    } catch {
+      resolvedModelId = undefined;
+    }
 
     res.json({
       ok: true,

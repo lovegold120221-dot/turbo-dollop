@@ -140,13 +140,17 @@ export async function getRecentMessages(userId: string, limit = 20): Promise<{ r
 }
 
 export async function getSessionSummaries(userId: string): Promise<{ session_start: string; session_end: string; summary: string }[]> {
-  const { data: sessions } = await supabase
-    .from('session_summaries')
-    .select('session_start, session_end, summary')
-    .eq('user_id', userId)
-    .order('session_end', { ascending: false })
-    .limit(3);
-  return sessions || [];
+  try {
+    const { data: sessions } = await supabase
+      .from('session_summaries')
+      .select('session_start, session_end, summary')
+      .eq('user_id', userId)
+      .order('session_end', { ascending: false })
+      .limit(3);
+    return sessions || [];
+  } catch {
+    return [];
+  }
 }
 
 export async function getLatestSessionTimestamp(userId: string): Promise<string | null> {
