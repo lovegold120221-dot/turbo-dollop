@@ -69,7 +69,7 @@ npm run check:eburon-branding   # Validate no upstream provider branding
 | `GET/POST /api/whatsapp/*` | Pairing, messages, send, stream, webhook, admin |
 | `GET /api/whatsapp/stream/:userId` | SSE real-time message stream |
 | `POST /api/web/glance` | DuckDuckGo web search |
-| `POST /api/sandbox/run` | Sub-agent runner (OpenCode CLI or Eburon Worker) |
+| `POST /api/sandbox/run` | Sub-agent runner (Eburon Sandbox → Cerebras → Eburon Worker fallback chain) |
 | `POST /api/cerebras/browser` | Browser-Use + Cerebras automation |
 | `POST /api/ollama/generate` | Ollama LLM proxy (SSE streaming) |
 | `POST /api/website/generate` | Web Architect (Eburon Worker) |

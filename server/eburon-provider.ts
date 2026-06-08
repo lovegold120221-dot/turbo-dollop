@@ -10,12 +10,14 @@ const _m = String.fromCharCode(103, 101, 109, 105, 110, 105, 45, 50, 46, 53, 45,
 const _m2 = String.fromCharCode(103, 101, 109, 105, 110, 105, 45, 50, 46, 53, 45, 102, 108, 97, 115, 104);
 const _mv = String.fromCharCode(103, 101, 109, 105, 110, 105, 45, 50, 46, 53, 45, 102, 108, 97, 115, 104, 45, 118, 105, 115, 105, 111, 110, 45, 108, 97, 116, 101, 115, 116);
 const _mw = String.fromCharCode(103, 101, 109, 105, 110, 105, 45, 50, 46, 48, 45, 102, 108, 97, 115, 104, 45, 101, 120, 112);
+const _ms = String.fromCharCode(103, 101, 109, 105, 110, 105, 45, 51, 46, 49, 45, 102, 108, 97, 115, 104, 45, 108, 105, 116, 101);
 
 const EBURON_MODEL_REGISTRY: Record<string, string | undefined> = {
   eburon_text: process.env.EBURON_TEXT_MODEL_ID_INTERNAL || _m2,
   eburon_realtime_voice: process.env.EBURON_VOICE_MODEL_ID_INTERNAL || _m,
   eburon_vision: process.env.EBURON_VISION_MODEL_ID_INTERNAL || _mv,
   eburon_worker: process.env.EBURON_WORKER_MODEL_ID_INTERNAL || _mw,
+  eburon_sandbox: process.env.EBURON_SANDBOX_MODEL_ID_INTERNAL || _ms,
 };
 
 // ── Whitelists ──
@@ -26,6 +28,7 @@ const EBURON_ALLOWED_MODELS = [
   'eburon_realtime_voice',
   'eburon_vision',
   'eburon_worker',
+  'eburon_sandbox',
 ];
 
 // ── Internal client (initialized once) ──
@@ -199,6 +202,103 @@ export function createEburonWorkerClient(): {
     modelAlias,
     modelId,
   };
+}
+
+// ── Eburon Sandbox (streaming model with thinking + tools) ──
+
+export async function generateEburonSandbox(params: {
+  prompt: string;
+  systemInstruction?: string;
+  timeoutSec?: number;
+  maxOutputTokens?: number;
+}): Promise<{ text: string; modelId: string }> {
+  const modelAlias = 'eburon_sandbox';
+  const modelId = resolveEburonModelAlias(modelAlias);
+  const apiKey = process.env.EBURON_CORE_KEY;
+  if (!apiKey) throw new Error('[Eburon] EBURON_CORE_KEY not configured for sandbox');
+
+  const contents = [];
+  if (params.systemInstruction) {
+    contents.push({ role: 'user', parts: [{ text: params.systemInstruction }] });
+  }
+  contents.push({ role: 'user', parts: [{ text: params.prompt }] });
+
+  const body = {
+    contents,
+    generationConfig: {
+      thinkingConfig: { thinkingLevel: 'HIGH' },
+      mediaResolution: 'MEDIA_RESOLUTION_HIGH',
+      maxOutputTokens: params.maxOutputTokens ?? 32768,
+      temperature: 0.3,
+    },
+    tools: [
+      { urlContext: {} },
+      { codeExecution: {} },
+      { googleSearch: {} },
+    ],
+    systemInstruction: params.systemInstruction
+      ? { parts: [{ text: params.systemInstruction }] }
+      : {},
+  };
+
+  const timeoutSec = Math.min(params.timeoutSec ?? 180, 300);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutSec * 1000);
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:streamGenerateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      },
+    );
+
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      console.error(`[Eburon Sandbox] HTTP ${res.status}: ${errBody.slice(0, 300)}`);
+      throw new Error(`[Eburon Sandbox] HTTP ${res.status}`);
+    }
+
+    const rawText = await res.text();
+    const lines = rawText.split('\n').filter((l) => l.trim());
+    let fullText = '';
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const payload = line.slice(6).trim();
+      if (payload === '[DONE]') break;
+      try {
+        const chunk = JSON.parse(payload);
+        const parts = chunk?.candidates?.[0]?.content?.parts;
+        if (parts) {
+          for (const part of parts) {
+            if (part.text) fullText += part.text;
+          }
+        }
+      } catch {
+        // skip unparseable chunks
+      }
+    }
+
+    if (!fullText || fullText.length < 5) {
+      throw new Error('[Eburon Sandbox] Empty or too short response');
+    }
+
+    return { text: fullText, modelId };
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error(`[Eburon Sandbox] Timed out after ${timeoutSec}s`);
+    }
+    if (err.message?.startsWith('[Eburon Sandbox]')) throw err;
+    console.error('[Eburon Sandbox] Stream failed:', err.message || err);
+    throw new Error('[Eburon Sandbox] Stream failed');
+  }
 }
 
 // ── Startup validation ──

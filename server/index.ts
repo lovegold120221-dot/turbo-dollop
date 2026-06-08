@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import {
   validateEburonConfig,
   generateEburonWorker,
+  generateEburonSandbox,
   generateEburonText,
   createEburonClient,
   resolveEburonModelAlias,
@@ -1002,27 +1003,45 @@ app.post('/api/sandbox/run', async (req, res) => {
       agentUsed = 'opencode';
 
     } else {
-      setTaskProgress(task, 'running', { agent: 'cerebras' });
       const artifactTypes = new Set([
         'document', 'website', 'writing', 'analysis', 'research', 'dashboard', 'app', 'artifact',
       ]);
       const systemPrompt = artifactTypes.has(safeType) ? XERO_HTML_SYSTEM : 'You are a helpful assistant. Complete the task and return the result concisely.';
+
+      // Primary: Eburon Sandbox (streaming model with thinking + tools)
+      setTaskProgress(task, 'running', { agent: 'eburon_sandbox' });
       try {
-        const result = await callCerebras(systemPrompt, safeDesc, Math.min(safeTimeout, 180), 32768);
-        resultText = result.content;
-        agentUsed = 'cerebras-gpt-oss-120b';
+        const sandboxResult = await generateEburonSandbox({
+          prompt: safeDesc,
+          systemInstruction: systemPrompt,
+          timeoutSec: Math.min(safeTimeout, 180),
+          maxOutputTokens: 32768,
+        });
+        resultText = sandboxResult.text;
+        agentUsed = 'eburon_sandbox';
         if (!resultText || resultText.length < 5) throw new Error('Empty or too short response');
-      } catch {
-        setTaskProgress(task, 'running', { agent: 'eburon_worker', message: 'Falling back to Eburon Worker' });
+      } catch (sandboxErr: any) {
+        console.warn('[Sandbox] Eburon Sandbox failed, falling back to Cerebras:', sandboxErr.message?.slice(0, 100));
+        // Fallback 1: Cerebras
+        setTaskProgress(task, 'running', { agent: 'cerebras', message: 'Falling back to Cerebras' });
         try {
-          const eburonResult = await generateEburonWorker({
-            prompt: safeDesc,
-            systemInstruction: systemPrompt,
-          });
-          resultText = eburonResult.text || '[No response from sandbox]';
-          agentUsed = 'eburon_worker';
-        } catch (e: any) {
-          throw new Error(`All agents failed (Cerebras + Eburon Worker). Last error: ${e.message}`);
+          const result = await callCerebras(systemPrompt, safeDesc, Math.min(safeTimeout, 180), 32768);
+          resultText = result.content;
+          agentUsed = 'cerebras-gpt-oss-120b';
+          if (!resultText || resultText.length < 5) throw new Error('Empty or too short response');
+        } catch {
+          // Fallback 2: Eburon Worker
+          setTaskProgress(task, 'running', { agent: 'eburon_worker', message: 'Falling back to Eburon Worker' });
+          try {
+            const eburonResult = await generateEburonWorker({
+              prompt: safeDesc,
+              systemInstruction: systemPrompt,
+            });
+            resultText = eburonResult.text || '[No response from sandbox]';
+            agentUsed = 'eburon_worker';
+          } catch (e: any) {
+            throw new Error(`All agents failed (Eburon Sandbox + Cerebras + Eburon Worker). Last error: ${e.message}`);
+          }
         }
       }
     }
