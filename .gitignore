@@ -11,3 +11,5 @@ coverage/
 client.json
 
 .baileys_auth/
+
+LEGEND.md

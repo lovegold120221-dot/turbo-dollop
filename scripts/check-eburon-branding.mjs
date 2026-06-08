@@ -39,6 +39,8 @@ const ALLOWLIST_GLOB = [
   '*.mp3',
   '*.gif',
   'scripts/check-eburon-branding.mjs',
+  'AGENTS.md',
+  'CLAUDE.md',
   '.svg',
 ];
 

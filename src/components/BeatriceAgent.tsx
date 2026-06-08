@@ -732,8 +732,8 @@ const clampTemplateContent = (content: string, maxChars = 36_000) => {
 };
 
 const extractHtmlArtifact = (raw: string) => {
-  const cleaned = raw
-    .replace(/^```(?:html)?/i, '')
+  const cleaned = String(raw || '')
+    .replace(/^```(?:html)?\s*/i, '')
     .replace(/```$/i, '')
     .trim();
 
@@ -747,25 +747,7 @@ const extractHtmlArtifact = (raw: string) => {
     return '<!DOCTYPE html>\n' + cleaned.slice(htmlIndex).trim();
   }
 
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Generated Document</title>
-  <style>
-    body { margin: 0; padding: 32px; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f1ea; color: #1f1a17; }
-    main { max-width: 900px; margin: 0 auto; background: white; border-radius: 20px; padding: 40px; box-shadow: 0 20px 60px rgba(0,0,0,.08); }
-    pre { white-space: pre-wrap; font-family: inherit; line-height: 1.55; }
-    @media print { body { background: white; padding: 0; } main { box-shadow: none; border-radius: 0; } }
-  </style>
-</head>
-<body>
-  <main>
-    <pre>${cleaned.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c] || c))}</pre>
-  </main>
-</body>
-</html>`;
+  throw new Error('The generator returned text instead of a live HTML artifact.');
 };
 
 const inferDocumentTemplate = (title: string, prompt: string, explicit?: string) => {
@@ -3939,7 +3921,7 @@ ${historyContext}
 
                         let { data, error: searchError } = await supabase
                           .from('memories')
-                          .select('id, content, tags, created_at, memory_type, summary, importance_score, confidence_score, event_timestamp, last_accessed_at, is_stale, superseded_by_memory_id')
+                          .select('id, content, tags, created_at, summary, importance_score, confidence_score, event_timestamp, last_accessed_at, is_stale, superseded_by_memory_id')
                           .eq('user_id', user.uid)
                           .eq('is_stale', false)
                           .is('superseded_by_memory_id', null)
@@ -3955,7 +3937,7 @@ ${historyContext}
                             content: m.content,
                             tags: m.tags,
                             date: m.created_at,
-                            type: m.memory_type,
+                            type: m.memory_type || 'fact',
                             summary: m.summary,
                             importance: m.importance_score,
                             confidence: m.confidence_score,
@@ -4132,7 +4114,7 @@ ${historyContext}
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
-                            task_description: `Title: ${title}\n\nUser request: ${prompt}\n\nTemplate: ${args.templateName || 'proposal'}\n\nLanguage: ${authLanguage}\n\nGenerate a complete standalone HTML document.`,
+                            task_description: `Title: ${title}\n\nUser request: ${prompt}\n\nTemplate: ${args.templateName || 'proposal'}\n\nLanguage: ${authLanguage}\n\nCreate one complete standalone HTML document.\n\nHard requirements:\n- Return ONLY raw HTML.\n- Start with <!DOCTYPE html>.\n- Include <html>, <head>, and <body>.\n- Put all CSS inside <style>.\n- Put JavaScript inside <script> only if useful.\n- No markdown.\n- No bullet-plan outside HTML.\n- No explanation.\n- Must render directly in iframe srcDoc as a live-server style preview.`,
                             task_type: 'document',
                             timeout: 120,
                             taskId: sandboxTaskId,
@@ -4143,7 +4125,7 @@ ${historyContext}
                         if (!resp.ok || !data.ok) throw new Error(data.error || 'Document generation failed');
 
                         let html = data.result;
-                        try { html = extractHtmlArtifact(html); } catch {}
+                        html = extractHtmlArtifact(html);
 
                         setGeneratedDocumentTask(generationTaskId, title, html, 'done');
 
@@ -4184,26 +4166,35 @@ ${historyContext}
                       const title = String(args.title || 'Website');
                       const prompt = String(args.prompt || '');
                       const generationTaskId = crypto.randomUUID();
-                      const timestamp = Date.now().toString();
+                      const sandboxTaskId = crypto.randomUUID();
                       try {
                         setGeneratedDocumentTask(generationTaskId, title, '', 'working');
-                        const resp = await fetch('/api/website/generate', {
+
+                        const evtSource = new EventSource(`/api/sandbox/progress/${sandboxTaskId}`);
+                        evtSource.onmessage = (e) => {
+                          try {
+                            const p = JSON.parse(e.data);
+                            if (p.status === 'running') setGeneratedDocumentTask(generationTaskId, title, '', 'working');
+                          } catch {}
+                        };
+
+                        const resp = await fetch('/api/sandbox/run', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
-                            userId: user.uid,
-                            title,
-                            prompt: `${prompt}\n\nWebsite type/template: ${args.template || 'landing'}`,
-                            timestamp,
+                            task_description: `Title: ${title}\n\nWebsite request: ${prompt}\n\nTemplate: ${args.template || 'landing'}\n\nCreate one complete standalone production-ready website.\n\nHard requirements:\n- Return ONLY raw HTML.\n- Start with <!DOCTYPE html>.\n- Include <html>, <head>, and <body>.\n- Put all CSS inside <style>.\n- Put JavaScript inside <script> only if useful.\n- No markdown.\n- No implementation plan.\n- No explanation.\n- Must render directly in iframe srcDoc as a live-server style preview.`,
+                            task_type: 'website',
+                            timeout: 120,
+                            taskId: sandboxTaskId,
                           }),
                         });
+                        evtSource.close();
                         const data = await resp.json();
                         if (!resp.ok || !data.ok) throw new Error(data.error || 'Website generation failed');
-                        const htmlResp = await fetch(data.slug);
-                        const html = await htmlResp.text();
-                        if (!html || (!html.toLowerCase().includes('<!doctype html') && !html.toLowerCase().includes('<html'))) {
-                          throw new Error('Generated website did not return valid HTML.');
-                        }
+
+                        let html = data.result;
+                        html = extractHtmlArtifact(html);
+
                         setGeneratedDocumentTask(generationTaskId, title, html, 'done');
                         const wsOutput = {
                           id: `web_${generationTaskId}`,
@@ -4220,9 +4211,8 @@ ${historyContext}
                           ok: true,
                           title,
                           content: html,
-                          previewUrl: data.slug,
                           template: args.template || 'landing',
-                          agent: 'website-generator',
+                          agent: data.agent || 'backend',
                         };
                       } catch (e: any) {
                         setGeneratedDocumentTask(generationTaskId, title, '', 'error');
@@ -4305,10 +4295,12 @@ ${historyContext}
                       setTasks(prev => prev.filter(t => t.id !== taskId));
                     }, 8000);
 
-                    if (
-                      !(callName === 'create_document' && result?.content) &&
-                      !(callName === 'generate_website' && result?.content)
-                    ) {
+                    const artifactToolNames = new Set([
+                      'create_document',
+                      'generate_website',
+                    ]);
+
+                    if (!(artifactToolNames.has(callName) && result?.content)) {
                       if (callName !== 'dial_contact' && callName !== 'whatsapp_call') {
                         showToolResult(callName, result);
                       }

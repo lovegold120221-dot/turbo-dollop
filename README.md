@@ -63,7 +63,7 @@ Data Layer
 
 ### Prerequisites
 - Node.js 22+
-- A Eburon Core key ([Google AI Studio](https://aistudio.google.com))
+- An Eburon Core API key
 - A Supabase project
 - A Firebase project (for auth)
 

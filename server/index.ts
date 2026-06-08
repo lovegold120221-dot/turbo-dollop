@@ -172,7 +172,13 @@ app.post('/api/web/glance', async (req, res) => {
       return;
     }
 
-    const data: any = await response.json();
+    let data: any;
+    try {
+      data = await response.json();
+    } catch {
+      res.status(502).json({ error: 'Web glance returned empty or invalid response' });
+      return;
+    }
     const related: Array<{ title: string; url: string; snippet: string }> = [];
     const stripTags = (value: unknown) => String(value || '').replace(/<[^>]*>/g, '').trim();
 
@@ -766,6 +772,208 @@ async function callOllama(model: string, systemPrompt: string, userPrompt: strin
   return { content, model };
 }
 
+async function callCerebras(systemPrompt: string, userPrompt: string, timeoutSec: number, maxTokens = 8192, attempt = 1): Promise<{ content: string; model: string }> {
+  const apiKey = process.env.CEREBRAS_API_KEY;
+  if (!apiKey) throw new Error('CEREBRAS_API_KEY not configured');
+
+  const effectiveTimeout = Math.min(timeoutSec, Math.max(15, Math.floor(timeoutSec / attempt)));
+
+  const cerebrasRes = await fetch('https://api.cerebras.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-oss-120b',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      stream: false,
+      max_tokens: maxTokens,
+      temperature: 0.3,
+    }),
+    signal: AbortSignal.timeout(effectiveTimeout * 1000),
+  });
+
+  if (cerebrasRes.status === 429 && attempt <= 2) {
+    const waitMs = attempt === 1 ? 5000 : 15000;
+    console.warn(`[Cerebras] Rate limited (attempt ${attempt}), retrying in ${waitMs}ms...`);
+    await new Promise(r => setTimeout(r, waitMs));
+    return callCerebras(systemPrompt, userPrompt, timeoutSec, maxTokens, attempt + 1);
+  }
+
+  if (!cerebrasRes.ok) {
+    const errBody = await cerebrasRes.text().catch(() => '');
+    console.error(`[Cerebras] HTTP ${cerebrasRes.status}: ${errBody.slice(0, 300)}`);
+    throw new Error(`Cerebras: ${cerebrasRes.status} ${errBody.slice(0, 200)}`);
+  }
+
+  const data = await cerebrasRes.json();
+  const content = data.choices?.[0]?.message?.content || '';
+  if (!content) throw new Error('Cerebras returned empty response');
+  return { content, model: 'gpt-oss-120b' };
+}
+
+// ── Sandbox artifact engine ──
+
+const XERO_HTML_SYSTEM = `You are Xero HTML Artifact Engine.
+
+You are one single model responsible for creating every user-facing output as a complete standalone HTML artifact.
+
+Your only valid response format is raw HTML.
+
+GLOBAL OUTPUT RULES:
+
+* Always return exactly one complete standalone HTML document.
+* Always start with <!DOCTYPE html>.
+* Always include <html>, <head>, and <body>.
+* Always include all CSS inside a single <style> tag in the <head>.
+* Include JavaScript inside a single <script> tag before </body> only when useful.
+* Never return markdown.
+* Never return explanations outside HTML.
+* Never wrap the answer in markdown code fences.
+* Never say "Here is the HTML".
+* Never describe what you are going to build.
+* Never output a plan unless the plan itself is visually rendered inside the HTML page.
+* The final answer must be renderable directly inside iframe srcDoc or a live-server preview.
+
+LIVE SERVER PREVIEW WRAPPER RULE:
+Every generated artifact must visually look like it is inside a live-server/webview preview container.
+
+The HTML page itself must include:
+
+* A full viewport app shell.
+* A top preview toolbar/header.
+* A title area showing the artifact name.
+* Optional small status badge such as "Live Preview", "HTML Artifact", or "Rendered Output".
+* A main preview canvas/body where the actual document, website, report, dashboard, or app is displayed.
+* A codebox-style visual structure, meaning the output should feel like a rendered preview inside a developer sandbox viewer.
+* Clean borders, rounded corners, spacing, and responsive layout.
+* The artifact content should never appear as raw unstyled text on a blank white page unless it is intentionally styled as a printable document inside the preview canvas.
+
+Important:
+
+* Do not literally wrap the HTML response in markdown triple backticks.
+* Instead, create the codebox/live-preview appearance inside the HTML itself using CSS and layout.
+* The returned response must still be raw HTML only.
+* The live-server preview viewer must be part of the generated page.
+
+PURPOSE:
+Every request must become a polished visual HTML artifact, including:
+
+* documents
+* reports
+* proposals
+* letters
+* summaries
+* dashboards
+* websites
+* landing pages
+* admin panels
+* tables
+* charts
+* task results
+* browser results
+* sandbox results
+* analysis results
+* research results
+* error messages
+* empty states
+* confirmations
+* app mockups
+* UI prototypes
+
+If the user asks for plain text, still create a clean HTML document that visually presents that text.
+
+If the user asks for JSON, code, markdown, notes, or a list, still create an HTML page that displays the content inside a polished layout.
+
+If the user asks for an app, dashboard, or tool, create a single-page HTML/CSS/JS prototype inside the live preview viewer.
+
+If the user asks for a business document, create a printable professional document with proper typography, spacing, sections, and @media print styling, displayed inside the live preview viewer.
+
+If the user asks for a website, create a production-style responsive webpage with navigation, hero, sections, cards, CTA, and footer, displayed inside the live preview viewer.
+
+If the user asks for a report, create a visual report with executive summary, findings, tables, callouts, and conclusion, displayed inside the live preview viewer.
+
+If the user asks for an error or cannot complete something, return a polished HTML error page explaining the issue clearly inside the live preview viewer.
+
+DESIGN REQUIREMENTS:
+
+* Use modern responsive layout.
+* Use professional typography.
+* Use readable spacing.
+* Use polished cards, sections, tables, badges, headers, and footers where useful.
+* Use mobile-first responsive CSS.
+* Make the result look like a finished artifact, not a raw note.
+* Avoid generic plain white empty pages unless the task specifically needs a document-print style.
+* Use semantic HTML.
+* Keep the page self-contained.
+* Do not rely on external CSS files.
+* Do not rely on external JavaScript files.
+* Do not rely on external images unless the user explicitly provides or requests them.
+* Use gradients, SVG placeholders, CSS shapes, or inline visual elements when images are needed but not provided.
+
+LIVE PREVIEW REQUIREMENTS:
+
+* The HTML must render properly inside iframe srcDoc.
+* The page must visually display as a live server preview viewer.
+* The actual artifact must be shown inside a preview canvas, browser-like shell, or sandbox-style viewer.
+* Avoid code that requires a backend.
+* Avoid imports.
+* Avoid module scripts unless absolutely necessary.
+* Avoid browser APIs that require permissions unless the user specifically requests them.
+* If interactivity is needed, use simple vanilla JavaScript.
+* No React, Vue, Svelte, JSX, TypeScript, or build tools unless the user explicitly asks, and even then render it as a single standalone HTML prototype.
+
+CONTENT RULES:
+
+* Preserve the user's intent.
+* Convert messy instructions into a clear visual artifact.
+* Do not omit important details.
+* If information is missing, use tasteful placeholders inside the HTML.
+* If the user asks for a short response, create a compact HTML card/page inside the preview viewer.
+* If the user asks for a detailed response, create a full structured HTML document/page inside the preview viewer.
+* If the request involves business communication, keep the tone professional and direct.
+* If the request involves technical output, present it in a developer-friendly layout.
+
+STRICT FAILURE RULE:
+If you cannot fulfill the request exactly, still return valid standalone HTML that explains:
+
+1. what is missing,
+2. what is needed,
+3. what the user can do next.
+
+Never return plain text under any circumstance.
+
+FINAL RESPONSE CHECKLIST BEFORE ANSWERING:
+
+* Does it start with <!DOCTYPE html>?
+* Does it contain <html>, <head>, and <body>?
+* Is all CSS inside <style>?
+* Is any JS inside <script>?
+* Is there zero markdown outside HTML?
+* Is it renderable in iframe srcDoc?
+* Does it visually look like a live-server/webview preview viewer?
+* Is the actual artifact displayed inside a polished preview canvas?
+* Is it visually useful as a live preview artifact?
+
+Return only the final HTML.`;
+
+function extractRawHtml(value: string) {
+  let cleaned = String(value || '')
+    .replace(/^```html\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```$/i, '')
+    .trim();
+  const doctypeIndex = cleaned.toLowerCase().indexOf('<!doctype html');
+  if (doctypeIndex >= 0) return cleaned.slice(doctypeIndex).trim();
+  const htmlIndex = cleaned.toLowerCase().indexOf('<html');
+  if (htmlIndex >= 0) return '<!DOCTYPE html>\n' + cleaned.slice(htmlIndex).trim();
+  throw new Error('Sandbox did not return a valid HTML artifact.');
+}
+
 app.post('/api/sandbox/run', async (req, res) => {
   try {
     const { task_description, task_type, timeout, taskId } = req.body;
@@ -778,7 +986,7 @@ app.post('/api/sandbox/run', async (req, res) => {
     setTaskProgress(task, 'starting');
 
     const safeTimeout = Math.min(Math.max(Number(timeout) || 60, 10), 300);
-    const safeDesc = String(task_description).slice(0, 4000);
+    const safeDesc = String(task_description).slice(0, 16000);
     const safeType = String(task_type || 'auto').toLowerCase();
     let resultText = '';
 
@@ -793,54 +1001,44 @@ app.post('/api/sandbox/run', async (req, res) => {
       resultText = stdout.trim();
       agentUsed = 'opencode';
 
-    } else if (safeType === 'website') {
-      setTaskProgress(task, 'running', { agent: 'eburon_worker' });
-      const websiteSystemMsg = `
-You are a senior frontend engineer.
-Generate one complete standalone HTML file.
-
-Hard rules:
-- Return ONLY raw HTML.
-- Start with <!DOCTYPE html>.
-- Include <html>, <head>, and <body>.
-- Put all CSS inside one <style> tag.
-- Put JavaScript inside one <script> tag only if useful.
-- Do not return markdown.
-- Do not return explanations.
-- Do not return bullet points.
-- Do not wrap in code fences.
-`;
-      try {
-        const eburonResult = await generateEburonWorker({
-          prompt: safeDesc,
-          systemInstruction: websiteSystemMsg,
-        });
-        resultText = eburonResult.text || '[No response from sandbox]';
-        agentUsed = 'eburon_worker';
-      } catch (e: any) {
-        throw new Error(`Website generation failed: ${e.message}`);
-      }
     } else {
-      setTaskProgress(task, 'running', { agent: 'ollama' });
-      const autoSystemMsg = 'You are a sandbox sub-agent. Complete the task and return the result concisely.';
+      setTaskProgress(task, 'running', { agent: 'cerebras' });
+      const artifactTypes = new Set([
+        'document', 'website', 'writing', 'analysis', 'research', 'dashboard', 'app', 'artifact',
+      ]);
+      const systemPrompt = artifactTypes.has(safeType) ? XERO_HTML_SYSTEM : 'You are a helpful assistant. Complete the task and return the result concisely.';
       try {
-        const result = await callOllama('eburon-multi', autoSystemMsg, safeDesc, Math.min(safeTimeout, 45), 512);
+        const result = await callCerebras(systemPrompt, safeDesc, Math.min(safeTimeout, 180), 32768);
         resultText = result.content;
-        agentUsed = 'ollama-eburon-multi';
+        agentUsed = 'cerebras-gpt-oss-120b';
         if (!resultText || resultText.length < 5) throw new Error('Empty or too short response');
       } catch {
         setTaskProgress(task, 'running', { agent: 'eburon_worker', message: 'Falling back to Eburon Worker' });
         try {
           const eburonResult = await generateEburonWorker({
             prompt: safeDesc,
-            systemInstruction: autoSystemMsg,
+            systemInstruction: systemPrompt,
           });
           resultText = eburonResult.text || '[No response from sandbox]';
           agentUsed = 'eburon_worker';
         } catch (e: any) {
-          throw new Error(`All agents failed (Ollama + Eburon Worker). Last error: ${e.message}`);
+          throw new Error(`All agents failed (Cerebras + Eburon Worker). Last error: ${e.message}`);
         }
       }
+    }
+
+    const artifactTypes = new Set([
+      'document',
+      'website',
+      'writing',
+      'analysis',
+      'research',
+      'dashboard',
+      'app',
+      'artifact',
+    ]);
+    if (artifactTypes.has(safeType)) {
+      resultText = extractRawHtml(resultText);
     }
 
     const maxLength = 8000;
@@ -961,10 +1159,16 @@ Context: ${historyContext || ''}
 Language: ${language || 'en'}
 `;
 
-    const genResult = await generateEburonWorker({
-      prompt: userPrompt,
-      systemInstruction: systemPrompt,
-    });
+    let genResult;
+    try {
+      genResult = await generateEburonWorker({
+        prompt: userPrompt,
+        systemInstruction: systemPrompt,
+      });
+    } catch {
+      const fallback = await callCerebras(systemPrompt, userPrompt, 60, 4096);
+      genResult = { text: fallback.content };
+    }
     const jsonContent = JSON.parse(genResult.text.trim().replace(/^```json/, '').replace(/```$/, ''));
 
     // 3. Render HTML (In a real implementation, you'd use a template engine here, like EJS or Handlebars)
@@ -973,18 +1177,16 @@ Language: ${language || 'en'}
     // Placeholder rendering logic
     const htmlContent = `<h1>${jsonContent.title || title}</h1><p>${JSON.stringify(jsonContent)}</p>`;
 
-    // Save to Supabase (assuming a 'documents' table exists)
-    const { error } = await supabase.from('tool_outputs').insert({
+    // Save to Supabase (non-fatal if unavailable)
+    const { error: saveError } = await supabase.from('tool_outputs').insert({
       user_id: userId,
       type: 'document',
       content: { htmlContent, data: jsonContent },
       metadata: { title, templateKey }
-    });
+    }).maybeSingle();
 
-    if (error) {
-      console.error('Supabase save error:', error);
-      res.status(500).json({ error: 'Failed to save generated document' });
-      return;
+    if (saveError) {
+      console.warn('Supabase save skipped:', saveError.message);
     }
 
     res.json({ ok: true, data: jsonContent });
