@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { X, FileText, FileDown, RotateCw, Monitor, Tablet, Smartphone, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, FileText, FileDown, RotateCw, Monitor, Tablet, Smartphone, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 
 interface DocumentViewerProps {
   title: string;
@@ -8,6 +8,7 @@ interface DocumentViewerProps {
   fileType?: string;
   onClose: () => void;
   personaName: string;
+  onRefine?: () => void;
 }
 
 type ViewportSize = 'desktop' | 'tablet' | 'mobile';
@@ -23,6 +24,7 @@ export function DocumentViewer({
   content,
   fileType = 'html',
   onClose,
+  onRefine,
 }: DocumentViewerProps) {
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [viewport, setViewport] = useState<ViewportSize>('desktop');
@@ -113,6 +115,18 @@ export function DocumentViewer({
             )}
           </AnimatePresence>
         </div>
+
+        {/* Ask Beatrice to refine */}
+        {onRefine && (
+          <button
+            onClick={onRefine}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--accent)] text-[var(--accent)] text-xs font-bold hover:bg-[var(--accent)] hover:text-[var(--accent-text)] transition-all"
+            title="Ask Beatrice to make changes"
+          >
+            <RefreshCw className="w-3 h-3" />
+            Refine
+          </button>
+        )}
 
         {/* Close */}
         <button onClick={onClose} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-glass-hover)] transition-all" aria-label="Close">

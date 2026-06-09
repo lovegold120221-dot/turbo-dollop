@@ -969,6 +969,7 @@ export function BeatriceAgent({
     text: string;
     callId: string;
   } | null>(null);
+  const [pendingRefineRequest, setPendingRefineRequest] = useState<string | null>(null);
   const [personaName, setPersonaName] = useState("Beatrice");
   const [customPrompt, setCustomPrompt] = useState("");
   const [selectedVoice, setSelectedVoice] = useState("Aoede");
@@ -1414,71 +1415,350 @@ export function BeatriceAgent({
 </html>`;
   };
 
-  const triggerSandboxShowcase = (toolName: string, serviceName: string) => {
-    let type: 'doc' | 'wa' | 'gm' | 'bea' | 'web' = 'doc';
-    let title = `Executing ${serviceName}`;
-    let mockup = '';
+  const generateWorkMessages = (taskDescription: string, toolName: string): string[] => {
+    const desc = taskDescription.toLowerCase();
+    const genericMessages = [
+      "Okay, let me start working on this...",
+      "Let me think about the approach...",
+    ];
 
-    if (serviceName.toLowerCase().includes('whatsapp') || toolName.includes('whatsapp')) {
-      type = 'wa';
-      mockup = `
-        <div class="wa-app">
-          <div class="wa-header"><span>WhatsApp</span></div>
-          <div class="wa-tabs"><div class="wa-tab active">CHATS</div><div class="wa-tab">STATUS</div><div class="wa-tab">CALLS</div></div>
-          <div style="padding:40px; text-align:center; color:#8696a0;">
-            <div style="width:40px; height:40px; border:3px solid #00a884; border-top-color:transparent; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 20px;"></div>
-            Syncing secure WhatsApp payload...
-          </div>
-        </div>
-      `;
-    } else if (toolName.includes('cerebras') || toolName.includes('browser')) {
-      type = 'web';
-      mockup = `
-        <div class="web-app">
-          <div class="web-chrome"><div class="web-address">Launching browser...</div></div>
-          <div style="padding:40px; text-align:center; color:#64748b;">
-            <div style="width:40px; height:40px; border:3px solid #2563eb; border-top-color:transparent; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 20px;"></div>
-            Navigating & extracting content via browser agent...
-          </div>
-        </div>
-      `;
-    } else if (serviceName.toLowerCase().includes('google') || toolName.includes('gmail') || toolName.includes('calendar') || toolName.includes('drive')) {
-      type = 'gm';
-      mockup = `
-        <div class="gm-app">
-          <div class="gm-header"><div class="gm-search">Fetching Google data...</div></div>
-          <div style="padding:40px; text-align:center; color:#a0aab2;">
-            <div style="width:40px; height:40px; border:3px solid #c2e7ff; border-top-color:transparent; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 20px;"></div>
-            Accessing Google Workspace...
-          </div>
-        </div>
-      `;
-    } else if (toolName.includes('web') || toolName.includes('search')) {
-      type = 'web';
-      mockup = `
-        <div class="web-app">
-          <div class="web-chrome"><div class="web-address">Searching global web...</div></div>
-          <div style="padding:40px; text-align:center; color:#64748b;">
-            <div style="width:40px; height:40px; border:3px solid #2563eb; border-top-color:transparent; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 20px;"></div>
-            Parsing search results...
-          </div>
-        </div>
-      `;
+    let themeMessages: string[] = [];
+
+    if (toolName.includes('website') || toolName.includes('create_website') || toolName.includes('generate_website')) {
+      themeMessages = [
+        "Right, let me plan the layout structure first...",
+        "Thinking about the color scheme and typography...",
+        "Okay, I'm building the header and navigation now...",
+        "Working on the hero section with a nice background...",
+        "Now adding the content sections... cards, grids, layouts...",
+        "Let me adjust the spacing and make it responsive...",
+        "Hmm, this should look good on mobile too...",
+        "Polishing the hover effects and transitions...",
+        "Almost there! Just fixing a few alignment details...",
+      ];
+    } else if (toolName.includes('document') || toolName.includes('create_document')) {
+      themeMessages = [
+        "Let me structure the document layout first...",
+        "Setting up the header with title and metadata...",
+        "Organizing the content sections logically...",
+        "Writing the main body content with proper formatting...",
+        "Adding styling to make it professional and clean...",
+        "Checking the typography and spacing...",
+        "Making sure everything flows well...",
+      ];
+    } else if (toolName.includes('cerebras') || toolName.includes('browser') || toolName.includes('search') || toolName.includes('web')) {
+      themeMessages = [
+        "Let me search the web for that information...",
+        "Scanning through search results...",
+        "Found some relevant pages, extracting the key data...",
+        "Parsing and organizing the information...",
+        "Cross-referencing multiple sources...",
+      ];
+    } else if (toolName.includes('whatsapp') || toolName.includes('wa_')) {
+      themeMessages = [
+        "Connecting to WhatsApp secure channel...",
+        "Syncing the latest messages...",
+        "Processing the request through the WhatsApp bridge...",
+        "Encrypting the payload for secure delivery...",
+      ];
+    } else if (toolName.includes('gmail') || toolName.includes('calendar') || toolName.includes('google') || toolName.includes('drive')) {
+      themeMessages = [
+        "Accessing Google Workspace API...",
+        "Fetching your data securely...",
+        "Processing the results...",
+        "Organizing the information from Google services...",
+      ];
+    } else if (toolName.includes('code') || toolName.includes('sandbox') || desc.includes('code') || desc.includes('app') || desc.includes('application')) {
+      themeMessages = [
+        "Okay, let me think through the architecture...",
+        "Setting up the project structure...",
+        "Writing the core logic now...",
+        "Adding error handling and edge cases...",
+        "Reviewing the code for quality...",
+        "Optimizing and cleaning up...",
+      ];
     } else {
-      mockup = `
-        <div style="padding:40px; text-align:center; color:#64748b;">
-          <div style="width:40px; height:40px; border:3px solid #d0a78b; border-top-color:transparent; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 20px;"></div>
-          Processing administrative task...
-        </div>
-      `;
+      themeMessages = [
+        "Let me process this request carefully...",
+        "Thinking through the best approach...",
+        "Working on it step by step...",
+        "Almost done, just verifying everything...",
+      ];
     }
 
+    const pauses = [
+      "...",
+      "ahuh...",
+      "come on...",
+      "hmm...",
+      "oh! got it...",
+      "right...",
+    ];
+
+    const result: string[] = [...genericMessages];
+    for (let i = 0; i < themeMessages.length; i++) {
+      result.push(themeMessages[i]);
+      if (i > 0 && i % 2 === 0) {
+        result.push(pauses[Math.floor(Math.random() * pauses.length)]);
+      }
+    }
+    result.push("Oh Boss, I'm nearly finished...");
+    return result;
+  };
+
+  const triggerSandboxShowcase = (toolName: string, serviceName: string, taskDescription?: string) => {
+    const messages = generateWorkMessages(taskDescription || serviceName, toolName);
+
+    const messageHtml = messages.map((msg, i) => `
+      <div class="thinking-msg" style="animation-delay:${0.5 + i * 1.8}s">
+        <div class="msg-avatar">B</div>
+        <div class="msg-bubble">
+          <div class="msg-text">${msg}</div>
+          <div class="msg-time">just now</div>
+        </div>
+      </div>
+    `).join('\n');
+
+    const thinkingPage = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Working...</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: linear-gradient(135deg, #0a0a1a 0%, #1a0a2e 50%, #0a0a1a 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: system-ui, -apple-system, sans-serif;
+  padding: 20px;
+}
+.thinking-container {
+  max-width: 560px;
+  width: 100%;
+}
+.thinking-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.thinking-header h2 {
+  color: #d0a78b;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.thinking-header p {
+  color: rgba(255,255,255,0.4);
+  font-size: 12px;
+  margin-top: 6px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.thinking-msgs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.thinking-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  opacity: 0;
+  transform: translateY(12px);
+  animation: msgIn 0.5s ease forwards;
+}
+.msg-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #d0a78b, #c5957a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0a0a1a;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+.msg-bubble {
+  background: rgba(208,167,139,0.12);
+  border: 1px solid rgba(208,167,139,0.2);
+  border-radius: 4px 16px 16px 16px;
+  padding: 12px 16px;
+  max-width: 480px;
+}
+.msg-text {
+  color: rgba(255,255,255,0.85);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.msg-time {
+  color: rgba(255,255,255,0.25);
+  font-size: 10px;
+  margin-top: 6px;
+  letter-spacing: 0.5px;
+}
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 0 8px 42px;
+  opacity: 0;
+  animation: msgIn 0.5s ease 0.3s forwards;
+}
+.typing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(208,167,139,0.5);
+  animation: typingBounce 1.4s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes msgIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-8px); }
+}
+.working-footer {
+  text-align: center;
+  margin-top: 32px;
+  color: rgba(255,255,255,0.2);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.6; }
+}
+</style>
+</head>
+<body>
+<div class="thinking-container">
+  <div class="thinking-header">
+    <h2>✦ Beatrice is working</h2>
+    <p>Generating your ${serviceName.replace(/_/g, ' ')}</p>
+  </div>
+  <div class="thinking-msgs">
+    ${messageHtml}
+  </div>
+  <div class="typing-indicator">
+    <div class="typing-dot"></div>
+    <div class="typing-dot"></div>
+    <div class="typing-dot"></div>
+  </div>
+  <div class="working-footer">Processing &bull; Please hold</div>
+</div>
+</body>
+</html>`;
+
     setActiveDocument({
-      title,
-      content: wrapInSandbox(title, mockup, type),
+      title: `Beatrice is working on ${serviceName.replace(/_/g, ' ')}...`,
+      content: thinkingPage,
       fileType: 'html'
     });
     setShowDocumentViewer(true);
+  };
+
+  const showCompletionTransition = (serviceName: string): Promise<void> => {
+    return new Promise(resolve => {
+      const transitionPage = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Done!</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: linear-gradient(135deg, #0a0a1a 0%, #1a0a2e 50%, #0a0a1a 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: system-ui, -apple-system, sans-serif;
+  padding: 20px;
+}
+.transition-container {
+  text-align: center;
+  animation: fadeInUp 0.6s ease;
+}
+.completion-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  display: inline-block;
+  animation: bounce 0.8s ease;
+}
+.completion-title {
+  color: #d0a78b;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+.completion-sub {
+  color: rgba(255,255,255,0.5);
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.completion-dots {
+  margin-top: 32px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+.completion-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #d0a78b;
+  animation: dotPulse 1.4s ease-in-out infinite;
+}
+.completion-dot:nth-child(2) { animation-delay: 0.2s; }
+.completion-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+@keyframes dotPulse {
+  0%, 60%, 100% { transform: scale(1); opacity: 0.4; }
+  30% { transform: scale(1.5); opacity: 1; }
+}
+</style>
+</head>
+<body>
+  <div class="transition-container">
+    <div class="completion-icon">🎉</div>
+    <div class="completion-title">Now this is it!</div>
+    <div class="completion-sub">${serviceName.replace(/_/g, ' ')} complete</div>
+    <div class="completion-dots">
+      <div class="completion-dot"></div>
+      <div class="completion-dot"></div>
+      <div class="completion-dot"></div>
+    </div>
+  </div>
+</body>
+</html>`;
+      setActiveDocument({
+        title: 'Complete!',
+        content: transitionPage,
+        fileType: 'html',
+      });
+      setTimeout(resolve, 1500);
+    });
   };
 
   const showToolResult = (toolName: string, result: any, error?: string) => {
@@ -1634,6 +1914,17 @@ export function BeatriceAgent({
       setActiveDocument({ title, content: 'Generation failed.', fileType: 'txt' });
       setShowDocumentViewer(true);
     }
+  };
+
+  const syncWorkspaceToServer = async (output: any) => {
+    try {
+      const backendUrl = getEnv('VITE_BACKEND_URL') || 'http://localhost:4200';
+      await fetch(`${backendUrl}/api/workspace/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(output),
+      });
+    } catch {} // silent fail — IndexedDB is the primary store
   };
 
   const handleSendChat = async (e: React.FormEvent) => {
@@ -3431,7 +3722,8 @@ ${historyContext}
                   ]);
 
                   // Trigger visual showcase in Sandbox during execution
-                  triggerSandboxShowcase(callName, serviceName);
+                  const taskDesc = call.args?.task_description || call.args?.prompt || call.args?.query || '';
+                  triggerSandboxShowcase(callName, serviceName, taskDesc);
 
                   try {
                     let result: any = null;
@@ -4127,6 +4419,7 @@ ${historyContext}
                         let html = data.result;
                         html = extractHtmlArtifact(html);
 
+                        await showCompletionTransition('document');
                         setGeneratedDocumentTask(generationTaskId, title, html, 'done');
 
                         const wsOutput = {
@@ -4140,6 +4433,7 @@ ${historyContext}
                           createdAt: new Date().toISOString(),
                         };
                         saveOutput(wsOutput).catch(() => {});
+                        syncWorkspaceToServer(wsOutput);
                         if (googleTokenRef.current) {
                           uploadToDrive(gFetch, wsOutput).then(driveResult => {
                             if (driveResult) {
@@ -4195,6 +4489,7 @@ ${historyContext}
                         let html = data.result;
                         html = extractHtmlArtifact(html);
 
+                        await showCompletionTransition('website');
                         setGeneratedDocumentTask(generationTaskId, title, html, 'done');
                         const wsOutput = {
                           id: `web_${generationTaskId}`,
@@ -4207,6 +4502,7 @@ ${historyContext}
                           createdAt: new Date().toISOString(),
                         };
                         saveOutput(wsOutput).catch(() => {});
+                        syncWorkspaceToServer(wsOutput);
                         result = {
                           ok: true,
                           title,
@@ -4302,6 +4598,7 @@ ${historyContext}
 
                     if (!(artifactToolNames.has(callName) && result?.content)) {
                       if (callName !== 'dial_contact' && callName !== 'whatsapp_call') {
+                        await showCompletionTransition(serviceName);
                         showToolResult(callName, result);
                       }
                     }
@@ -4959,6 +5256,11 @@ ${historyContext}
               setShowDocumentViewer(false);
               setActiveDocument(null);
             }}
+            onRefine={() => {
+              setShowDocumentViewer(false);
+              const currentTitle = activeDocument?.title || 'this';
+              setTimeout(() => setPendingRefineRequest(currentTitle), 300);
+            }}
           />
         )}
       </AnimatePresence>
@@ -5069,6 +5371,47 @@ ${historyContext}
                   </div>
                 </div>
               </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Refine request prompt */}
+      <AnimatePresence>
+        {pendingRefineRequest && (
+          <motion.div
+            initial={{ y: '100%', opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: '100%', opacity: 0 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[150] w-full max-w-lg px-4"
+          >
+            <div className="bg-[#0d0e11] border border-[#1a1b1f] rounded-2xl shadow-2xl overflow-hidden">
+              <div className="p-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#d0a78b] to-[#c5957a] flex items-center justify-center text-[#0a0a1a] font-bold text-sm">B</div>
+                  <div>
+                    <p className="text-white text-sm font-semibold">Beatrice</p>
+                    <p className="text-[var(--text-muted)] text-xs">Ready for your feedback</p>
+                  </div>
+                </div>
+                <p className="text-[var(--text-primary)] text-sm mb-4">Just tell me what you'd like me to change — I'll rework it for you.</p>
+                <button
+                  onClick={() => {
+                    setPendingRefineRequest(null);
+                    sendTextToLive(`[SYSTEM: The Boss wants to refine the "${pendingRefineRequest}". Listen to their instructions and make the changes.]`);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-[var(--accent)] text-[var(--accent-text)] text-xs font-bold hover:brightness-110 transition-all"
+                >
+                  I'm ready — tell Beatrice
+                </button>
+              </div>
+              <button
+                onClick={() => setPendingRefineRequest(null)}
+                className="w-full py-2 border-t border-[#1a1b1f] text-[var(--text-muted)] text-xs hover:text-[var(--text-primary)] transition-colors"
+              >
+                Never mind
+              </button>
             </div>
           </motion.div>
         )}

@@ -21,6 +21,7 @@ import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 import { WhatsAppManager } from './whatsapp';
 import * as waTools from './whatsapp-tools';
 import * as belgianTools from './belgian-tools';
+import { saveOutput as wsSave, listOutputs as wsList, deleteOutput as wsDelete } from './db/workspace-storage';
 // ── Startup validation ──
 const eburonWarnings = validateEburonConfig();
 if (eburonWarnings.length > 0 && process.env.NODE_ENV !== 'production') {
@@ -1522,6 +1523,45 @@ process.on('SIGTERM', async () => {
   console.log('Shutting down...');
   if (waManager) await waManager!.shutdown();
   process.exit(0);
+});
+
+// ── Workspace persistence API ──
+
+app.post('/api/workspace/save', async (req, res) => {
+  try {
+    const output = req.body;
+    if (!output || !output.id || !output.userId) {
+      res.status(400).json({ error: 'id and userId are required' });
+      return;
+    }
+    await wsSave(output);
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Save failed' });
+  }
+});
+
+app.get('/api/workspace/list/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) { res.status(400).json({ error: 'userId required' }); return; }
+    const outputs = await wsList(userId);
+    res.json({ ok: true, outputs });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'List failed' });
+  }
+});
+
+app.delete('/api/workspace/delete/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = String(req.query.userId || '');
+    if (!id || !userId) { res.status(400).json({ error: 'id and userId required' }); return; }
+    await wsDelete(id, userId);
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Delete failed' });
+  }
 });
 
 // ── SPA fallback — any non-API, non-asset route serves index.html ──
