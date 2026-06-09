@@ -141,7 +141,7 @@ app.get('/api/eburon/provider', async (_req, res) => {
       provider: 'eburon_core',
       configured: hasKey,
       defaultModel: 'eburon_text',
-      models: ['eburon_text', 'eburon_realtime_voice', 'eburon_vision', 'eburon_worker', 'eburon_sandbox', 'eburon_gemma_4_26b', 'eburon_gemma_4_31b', 'eburon_sandbox_free_fast'],
+      models: ['eburon_text', 'eburon_realtime_voice', 'eburon_vision', 'eburon_worker', 'eburon_sandbox', 'eburon_gemma_4_26b', 'eburon_gemma_4_31b', 'eburon_sandbox_free_fast', 'eburon-coder-pro'],
     });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to get provider info' });
@@ -979,7 +979,7 @@ async function callHermesMultitask(
   return { content, model: hermesModel };
 }
 
-async function callQwenCoder(
+async function callEburonCoderPro(
   systemPrompt: string,
   userPrompt: string,
   timeoutSec: number,
@@ -1016,10 +1016,10 @@ async function callQwenCoder(
   const content = data.message?.content || '';
 
   if (!content || content.length < 3) {
-    throw new Error('Qwen Coder returned empty response');
+    throw new Error('Eburon Coder Pro returned empty response');
   }
 
-  return { content, model: modelName };
+  return { content, model: 'eburon-coder-pro' };
 }
 
 async function callCerebras(systemPrompt: string, userPrompt: string, timeoutSec: number, maxTokens = 8192, attempt = 1): Promise<{ content: string; model: string }> {
@@ -1372,12 +1372,12 @@ app.post('/api/sandbox/run', async (req, res) => {
             agentUsed = 'cerebras-gpt-oss-120b';
             if (!resultText || resultText.length < 5) throw new Error('Empty or too short response');
           } catch {
-            // Fallback 2.5: Qwen Coder (local Ollama, no API limits)
-            setTaskProgress(task, 'running', { agent: 'qwen2.5-coder', message: 'Falling back to Qwen Coder 3B' });
+            // Fallback 2.5: Eburon Coder Pro (local Ollama, no API limits)
+            setTaskProgress(task, 'running', { agent: 'eburon-coder-pro', message: 'Falling back to Eburon Coder Pro (3B)' });
             try {
-              const qwenResult = await callQwenCoder(systemPrompt, safeDesc, Math.min(safeTimeout, 240), 16384);
+              const qwenResult = await callEburonCoderPro(systemPrompt, safeDesc, Math.min(safeTimeout, 240), 16384);
               resultText = qwenResult.content;
-              agentUsed = 'qwen2.5-coder:3b';
+              agentUsed = 'eburon-coder-pro';
               if (!resultText || resultText.length < 5) throw new Error('Empty or too short response');
             } catch {
               // Fallback 3: Eburon Worker
@@ -1390,7 +1390,7 @@ app.post('/api/sandbox/run', async (req, res) => {
                 resultText = eburonResult.text || '[No response from sandbox]';
                 agentUsed = 'eburon_worker';
               } catch (e: any) {
-                throw new Error(`All agents failed (Eburon Sandbox + Eburon Multimodal Pro + Cerebras + Qwen Coder + Eburon Worker). Last error: ${e.message}`);
+                throw new Error(`All agents failed (Eburon Sandbox + Eburon Multimodal Pro + Cerebras + Eburon Coder Pro + Eburon Worker). Last error: ${e.message}`);
               }
             }
           }

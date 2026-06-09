@@ -42,6 +42,7 @@ const EBURON_ALLOWED_MODELS = [
   'eburon_gemma_4_26b',
   'eburon_gemma_4_31b',
   'eburon_sandbox_free_fast',
+  'eburon-coder-pro',
 ];
 
 // ── Internal client (initialized once) ──
