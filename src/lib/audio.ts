@@ -1,11 +1,13 @@
 export class AudioStreamer {
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
+  private gainNode: GainNode | null = null;
   private dataArray: Uint8Array | null = null;
   private queue: Float32Array[] = [];
   private sampleRate = 24000;
   private scheduledTime = 0;
   private activeSources: AudioBufferSourceNode[] = [];
+  private stopTimeout: any = null;
 
   async init(sampleRate = 24000) {
     if (this.audioContext && this.audioContext.state !== 'closed') {
@@ -15,10 +17,16 @@ export class AudioStreamer {
     }
     this.sampleRate = sampleRate;
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    this.gainNode = this.audioContext.createGain();
+    this.gainNode.gain.value = 1;
+
     this.analyser = this.audioContext.createAnalyser();
     this.analyser.fftSize = 64;
     const bufferLength = this.analyser.frequencyBinCount;
     this.dataArray = new Uint8Array(bufferLength);
+    
+    this.gainNode.connect(this.analyser);
     this.analyser.connect(this.audioContext.destination);
 
     this.scheduledTime = 0;
@@ -42,7 +50,19 @@ export class AudioStreamer {
   }
 
   addPCM16(base64: string) {
-    if (!this.audioContext) return;
+    if (!this.audioContext || !this.gainNode) return;
+
+    // Ensure gain is restored for the new audio turn
+    if (this.stopTimeout) {
+      clearTimeout(this.stopTimeout);
+      this.stopTimeout = null;
+    }
+    
+    const now = this.audioContext.currentTime;
+    if (this.gainNode.gain.value < 0.9) {
+      this.gainNode.gain.setTargetAtTime(1, now, 0.02);
+    }
+
     const binary = atob(base64);
     const buffer = new ArrayBuffer(binary.length);
     const view = new DataView(buffer);
@@ -59,7 +79,7 @@ export class AudioStreamer {
   }
 
   private drainQueue() {
-    if (!this.audioContext) return;
+    if (!this.audioContext || !this.gainNode) return;
     while (this.queue.length > 0) {
       const chunk = this.queue.shift()!;
       const audioBuffer = this.audioContext.createBuffer(1, chunk.length, this.sampleRate);
@@ -67,7 +87,7 @@ export class AudioStreamer {
       
       const source = this.audioContext.createBufferSource();
       source.buffer = audioBuffer;
-      source.connect(this.analyser || this.audioContext.destination);
+      source.connect(this.gainNode);
       
       const currentTime = this.audioContext.currentTime;
       if (this.scheduledTime < currentTime) {
@@ -86,12 +106,33 @@ export class AudioStreamer {
 
   stop() {
     this.queue = [];
-    this.activeSources.forEach(s => {
-      try {
-        s.stop();
-        s.disconnect();
-      } catch (e) {}
-    });
+    if (this.stopTimeout) clearTimeout(this.stopTimeout);
+
+    if (this.gainNode && this.audioContext) {
+      // Smooth but fast fade out (150ms-ish)
+      const now = this.audioContext.currentTime;
+      this.gainNode.gain.setTargetAtTime(0, now, 0.04);
+      
+      // Keep references to current sources for delayed cleanup
+      const currentSources = [...this.activeSources];
+      this.stopTimeout = setTimeout(() => {
+        currentSources.forEach(s => {
+          try {
+            s.stop();
+            s.disconnect();
+          } catch (e) {}
+        });
+        this.stopTimeout = null;
+      }, 400);
+    } else {
+      this.activeSources.forEach(s => {
+        try {
+          s.stop();
+          s.disconnect();
+        } catch (e) {}
+      });
+    }
+
     this.activeSources = [];
     this.scheduledTime = 0;
   }
@@ -209,6 +250,9 @@ export class AudioRecorder {
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
+        sampleRate: 48000,
+        channelCount: 1,
+        latency: 0,
       } 
     });
     

@@ -129,7 +129,7 @@ export async function getLatestConversation(userId: string): Promise<{ timestamp
   return { timestamp: latest.created_at, summary: summaries };
 }
 
-export async function getRecentMessages(userId: string, limit = 20): Promise<{ role: string; text: string; created_at: string }[]> {
+export async function getRecentMessages(userId: string, limit = 50): Promise<{ role: string; text: string; created_at: string }[]> {
   const { data } = await supabase
     .from('messages')
     .select('role, text, created_at')
@@ -164,68 +164,91 @@ export async function getLatestSessionTimestamp(userId: string): Promise<string 
 }
 
 export async function getRelevantMemories(userId: string, _query?: string, limit = 10): Promise<MemoryRecord[]> {
-  const { data } = await supabase
-    .from('memories')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('is_stale', false)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  return (data || []) as MemoryRecord[];
+  try {
+    const { data, error } = await supabase
+      .from('memories')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return (data || []) as MemoryRecord[];
+  } catch {
+    const { data } = await supabase
+      .from('memories')
+      .select('id, user_id, content, tags, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    return (data || []) as MemoryRecord[];
+  }
 }
 
 export async function getStaleMemoryCount(userId: string): Promise<number> {
-  const { data } = await supabase
-    .from('memories')
-    .select('id', { count: 'exact' })
-    .eq('user_id', userId)
-    .eq('is_stale', true);
-  return data?.length || 0;
+  try {
+    const { data } = await supabase
+      .from('memories')
+      .select('id', { count: 'exact' })
+      .eq('user_id', userId)
+      .eq('is_stale', true);
+    return data?.length || 0;
+  } catch {
+    return 0;
+  }
 }
 
 export async function markMemoriesStale(userId: string, olderThan: string): Promise<void> {
-  await supabase
-    .from('memories')
-    .update({ is_stale: true, updated_at: new Date().toISOString() })
-    .eq('user_id', userId)
-    .lt('created_at', olderThan);
+  try {
+    await supabase
+      .from('memories')
+      .update({ is_stale: true, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .lt('created_at', olderThan);
+  } catch {
+    // Column might not exist
+  }
 }
 
 // ── Memory Freshness Validation ──
 
 export async function checkMemoryFreshness(userId: string): Promise<MemoryFreshness> {
   const now = new Date().toISOString();
-  const latestMemory = await supabase
-    .from('memories')
-    .select('created_at')
-    .eq('user_id', userId)
-    .eq('is_stale', false)
-    .order('created_at', { ascending: false })
-    .limit(1);
+  try {
+    const latestMemory = await supabase
+      .from('memories')
+      .select('created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1);
 
-  const latestConversation = await supabase
-    .from('messages')
-    .select('created_at')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(1);
+    const latestConversation = await supabase
+      .from('messages')
+      .select('created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1);
 
-  const latestMemTs = latestMemory.data?.[0]?.created_at || null;
-  const latestConvTs = latestConversation.data?.[0]?.created_at || null;
+    const latestMemTs = latestMemory.data?.[0]?.created_at || null;
+    const latestConvTs = latestConversation.data?.[0]?.created_at || null;
 
-  let stale = false;
-  if (latestMemTs && latestConvTs) {
-    stale = new Date(latestMemTs).getTime() < new Date(latestConvTs).getTime();
+    return {
+      memoryLoadedAt: now,
+      latestMemoryTimestamp: latestMemTs,
+      latestConversationTimestamp: latestConvTs,
+      staleMemoryDetected: false,
+      contextRebuilt: false,
+      status: !latestConvTs ? 'no_memory' : 'fresh',
+    };
+  } catch {
+    return {
+      memoryLoadedAt: now,
+      latestMemoryTimestamp: null,
+      latestConversationTimestamp: null,
+      staleMemoryDetected: false,
+      contextRebuilt: false,
+      status: 'no_memory',
+    };
   }
-
-  return {
-    memoryLoadedAt: now,
-    latestMemoryTimestamp: latestMemTs,
-    latestConversationTimestamp: latestConvTs,
-    staleMemoryDetected: stale,
-    contextRebuilt: false,
-    status: !latestConvTs ? 'no_memory' : stale ? 'stale' : 'fresh',
-  };
 }
 
 // ── Session Context Builder ──
@@ -238,10 +261,10 @@ export async function buildSessionContext(userId: string, options?: {
 }): Promise<SessionContextResult> {
   const timeBlock = getCurrentTimeBlock(options?.timezone);
 
-  const recentMessages = await getRecentMessages(userId, 20);
+  const recentMessages = await getRecentMessages(userId, 50);
   let latestConvTimestamp: string | null = null;
-  for (const msg of recentMessages) {
-    if (msg.created_at) { latestConvTimestamp = msg.created_at; break; }
+  if (recentMessages.length > 0) {
+    latestConvTimestamp = recentMessages[recentMessages.length - 1].created_at;
   }
 
   const timeSinceLast = latestConvTimestamp
@@ -252,38 +275,35 @@ export async function buildSessionContext(userId: string, options?: {
   const memories = await getRelevantMemories(userId);
 
   // Profile
-  const profileBlock = `[SESSION]
-session_started_at: ${new Date().toISOString()}
-last_conversation_at: ${latestConvTimestamp || 'unknown'}
-time_since_last_conversation: ${timeSinceLast}`;
+  const profileBlock = `[SESSION_CONTEXT]
+current_time: ${new Date().toISOString()}
+last_interaction_at: ${latestConvTimestamp || 'none'}
+time_elapsed_since_last_interaction: ${timeSinceLast}`;
 
   // Session summary
-  let sessionSummaryBlock = '[LATEST_CONVERSATION]\n';
+  let sessionSummaryBlock = '[PAST_SESSION_SUMMARIES]\n';
   if (sessions.length > 0) {
     sessionSummaryBlock += sessions.map(s =>
       `session_start: ${s.session_start}\nsession_end: ${s.session_end}\nsummary: ${s.summary?.slice(0, 300)}`
     ).join('\n---\n');
-  } else if (latestConvTimestamp && recentMessages.length > 0) {
-    sessionSummaryBlock += `timestamp: ${latestConvTimestamp}\nsummary: Recent conversation, ${recentMessages.length} messages`;
   } else {
-    sessionSummaryBlock += 'No previous conversation loaded';
+    sessionSummaryBlock += 'No archived session summaries available.';
   }
 
-  // Recent raw messages (recency-first, newest last for chronological reading)
-  let recentMessagesBlock = '[RECENT_RAW_MESSAGES]\n';
+  // Recent raw messages
+  let recentMessagesBlock = '[LATEST_CONVERSATION_HISTORY (Last 50 Messages)]\n';
   if (recentMessages.length > 0) {
     recentMessagesBlock += recentMessages.map(m =>
-      `[${m.created_at ? computeRelativeTime(m.created_at) : '?'}] ${m.role.toUpperCase()}: ${m.text?.slice(0, 200)}`
+      `[${m.created_at}] ${m.role.toUpperCase()}: ${m.text}`
     ).join('\n');
   } else {
-    recentMessagesBlock += 'No recent raw messages';
+    recentMessagesBlock += 'No recent conversation history.';
   }
 
-  // Long-term memory (only non-stale)
+  // Long-term memory
   let longTermMemoryBlock = '[LONG_TERM_MEMORY]\n';
-  const nonStaleMemories = memories.filter(m => !m.is_stale);
-  if (nonStaleMemories.length > 0) {
-    longTermMemoryBlock += nonStaleMemories.map(m =>
+  if (memories.length > 0) {
+    longTermMemoryBlock += memories.map(m =>
       `[${m.created_at ? computeRelativeTime(m.created_at) : '?'}]${m.tags?.length ? ` [${m.tags.join(', ')}]` : ''} ${m.content?.slice(0, 200)}`
     ).join('\n');
   } else {
@@ -313,11 +333,6 @@ latest_memory_timestamp: ${freshness.latestMemoryTimestamp || 'none'}
 latest_conversation_timestamp: ${freshness.latestConversationTimestamp || 'none'}
 memory_freshness_status: ${freshness.status}
 stale_memory_detected: ${freshness.staleMemoryDetected}`;
-
-  // Mark stale if needed
-  if (freshness.staleMemoryDetected && CFG.STALE_CHECK) {
-    await markMemoriesStale(userId, freshness.memoryLoadedAt);
-  }
 
   const fullContext = `${timeBlock}
 
@@ -368,22 +383,37 @@ export async function addMemory(userId: string, content: string, tags: string[],
   sessionId?: string;
   importance?: number;
 }): Promise<{ ok: boolean; error?: string }> {
-  const { error } = await supabase
-    .from('memories')
-    .insert({
-      user_id: userId,
-      content,
-      tags,
-      source: options?.source || 'manual_note',
-      session_id: options?.sessionId || null,
-      importance_score: options?.importance || 1,
-      recency_score: 1,
-      is_stale: false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    });
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  try {
+    const { error } = await supabase
+      .from('memories')
+      .insert({
+        user_id: userId,
+        content,
+        tags,
+        source: options?.source || 'manual_note',
+        session_id: options?.sessionId || null,
+        importance_score: options?.importance || 1,
+        recency_score: 1,
+        is_stale: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    if (error) throw error;
+    return { ok: true };
+  } catch (err: any) {
+    console.warn('[addMemory] Falling back to base insert:', err.message);
+    const { error } = await supabase
+      .from('memories')
+      .insert({
+        user_id: userId,
+        content,
+        tags,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }
 }
 
 // ── Debug Status ──

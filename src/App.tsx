@@ -16,6 +16,7 @@ import { AuthPage } from './components/AuthPage';
 import { BeatriceAgent } from './components/BeatriceAgent';
 import { WhatsAppPortal } from './components/WhatsAppPortal';
 import { WhatsAppOnboarding } from './components/WhatsAppOnboarding';
+import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 
 /* ── Theme system ── */
 type Theme = 'dark' | 'light';
@@ -251,17 +252,20 @@ export default function App() {
   }
 
   return (
-    <BeatriceAgent
-      user={user}
-      googleToken={googleToken}
-      setGoogleToken={setGoogleToken}
-      storeToken={storeToken}
-      authLanguage={authLanguage}
-      onSetLanguage={setAuthLanguage}
-      onLogout={handleLogout}
-      onLogin={handleLogin}
-      theme={theme}
-      onToggleTheme={toggleTheme}
-    />
+    <>
+      <BeatriceAgent
+        user={user}
+        googleToken={googleToken}
+        setGoogleToken={setGoogleToken}
+        storeToken={storeToken}
+        authLanguage={authLanguage}
+        onSetLanguage={setAuthLanguage}
+        onLogout={handleLogout}
+        onLogin={handleLogin}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
+      <PWAInstallPrompt />
+    </>
   );
 }

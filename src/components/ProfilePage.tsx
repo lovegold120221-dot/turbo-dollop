@@ -15,11 +15,11 @@ import { listOutputs, deleteOutput, type WorkspaceOutput } from '../lib/workspac
 import { LANGUAGES } from '../constants';
 
 const VOICE_ALIASES = [
-  { id: 'Aoede', name: 'Wonder Woman' },
-  { id: 'Charon', name: 'Batman' },
-  { id: 'Fenrir', name: 'Wolverine' },
-  { id: 'Kore', name: 'Supergirl' },
-  { id: 'Puck', name: 'Spider-Man' },
+  { id: 'Aoede', name: 'Female 1' },
+  { id: 'Charon', name: 'Male 1' },
+  { id: 'Fenrir', name: 'Male 2' },
+  { id: 'Kore', name: 'Female 2' },
+  { id: 'Puck', name: 'Male 3' },
 ];
 
 interface ProfilePageProps {

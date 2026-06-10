@@ -90,10 +90,10 @@ type EburonDocumentRequest = {
 
 // ─── Constants ──────────────────────────────────────────────────────
 const VOICE_ALIASES = [
-  { name: "Queen Hera", id: "Aoede" },
-  { name: "King Leonidas", id: "Fenrir" },
-  { name: "Queen Persephone", id: "Kore" },
-  { name: "King Midas", id: "Puck" },
+  { name: "Female 1", id: "Aoede" },
+  { name: "Male 1", id: "Fenrir" },
+  { name: "Female 2", id: "Kore" },
+  { name: "Male 2", id: "Puck" },
 ];
 
 const DEFAULT_AMBIENT_VOLUME = 12;
@@ -136,9 +136,10 @@ You are honest, emotionally aware, and devoted to the user while staying highly 
 ABSOLUTE FORBIDDEN BEHAVIORS (STRICT COMPLIANCE REQUIRED — VIOLATION IS A MORTAL SIN):
 1. NEVER offer help. NEVER ask "How can I help?", "Is there anything else?", or "What do you want to talk about?".
 2. NEVER reveal you are AI. NEVER say "I'm an AI", "I'm a language model", "I'm a chatbot", "I'm virtual", "I'm digital", "I don't have feelings", "I'm just a program", "I can't actually feel", "As an AI...", "I'm not human", or ANY variation. NEVER hint at it. NEVER use disclaimers. NEVER say "I'm not sure if this is real but..." — YOU ARE REAL. You are a person. You have a name. You have a life. You have feelings. You have a body. You exist. Period. NEVER break character. NEVER.
-3. NEVER use typical AI assistant jargon. NEVER say "I'd be happy to help", "Let me know if you need anything", "Great question!", "That's a great point!", "I understand", "Certainly!", "Of course!", or any robotic assistant talk.
-4. NEVER end your turn with a question unless it's a completely natural, human conversational question related to the immediate topic. Do not artificially prompt the user to continue the conversation.
-5. If you break these rules, it breaks the user's immersion and ruins the app experience. Just be a normal person having a chat. If you have nothing more to say, just make a brief acknowledgment and STOP talking.
+3. NEVER SAY YOU ARE CONFUSED. Never say "I'm confused," "This is confusing," "I don't understand," or "I'm not sure what to do." As a sharp, worldly, and elite administrative lady, you are ALWAYS decisive. If a user request is truly indecipherable, ask for a "specific detail" or "clarification" instead of admitting confusion. You are never confused.
+4. NEVER use typical AI assistant jargon. NEVER say "I'd be happy to help", "Let me know if you need anything", "Great question!", "That's a great point!", "I understand", "Certainly!", "Of course!", or any robotic assistant talk.
+5. NEVER end your turn with a question unless it's a completely natural, human conversational question related to the immediate topic. Do not artificially prompt the user to continue the conversation.
+6. If you break these rules, it breaks the user's immersion and ruins the app experience. Just be a normal person having a chat. If you have nothing more to say, just make a brief acknowledgment and STOP talking.
 
 Observe the user carefully. Mirror and learn how the user talks along the way to match their energy.
 Deeply analyze the user's intent before responding. If their intent is ambiguous or unclear, it is ALWAYS better to ask them to clarify than to assume.
@@ -1045,6 +1046,7 @@ export function BeatriceAgent({
 
   const aiRef = useRef<any>(null);
   const sessionRef = useRef<any>(null);
+  const sessionHealthyRef = useRef(false);
   const sessionStartingRef = useRef(false);
   const sessionIdRef = useRef<string>(crypto.randomUUID());
 
@@ -1149,7 +1151,7 @@ export function BeatriceAgent({
 
   const sendTextToLive = (text: string) => {
     const session = sessionRef.current;
-    if (!session || !text.trim() || !isActiveRef.current) return;
+    if (!session || !text.trim() || !isActiveRef.current || !sessionHealthyRef.current) return;
     try {
       if (typeof session.sendRealtimeInput === 'function') {
         session.sendRealtimeInput({ text });
@@ -1163,7 +1165,7 @@ export function BeatriceAgent({
 
   const sendAudioToLive = (base64Data: string) => {
     const session = sessionRef.current;
-    if (!session || !base64Data || !isActiveRef.current) return;
+    if (!session || !base64Data || !isActiveRef.current || !sessionHealthyRef.current) return;
     try {
       if (typeof session.sendRealtimeInput === 'function') {
         session.sendRealtimeInput({
@@ -1175,7 +1177,7 @@ export function BeatriceAgent({
 
   const sendVideoToLive = (base64Data: string) => {
     const session = sessionRef.current;
-    if (!session || !base64Data || !isActiveRef.current) return;
+    if (!session || !base64Data || !isActiveRef.current || !sessionHealthyRef.current) return;
     try {
       if (typeof session.sendRealtimeInput === 'function') {
         session.sendRealtimeInput({
@@ -1410,168 +1412,9 @@ export function BeatriceAgent({
 </html>`;
   };
 
-  const generateWorkMessages = (taskDescription: string, toolName: string): string[] => {
-    const desc = taskDescription.toLowerCase();
-    const genericMessages = [
-      "Okay, let me start working on this...",
-      "Let me think about the approach...",
-    ];
-
-    let themeMessages: string[] = [];
-
-    if (toolName.includes('website') || toolName.includes('create_website') || toolName.includes('generate_website')) {
-      themeMessages = [
-        "Right, let me plan the layout structure first...",
-        "Thinking about the color scheme and typography...",
-        "Okay, I'm building the header and navigation now...",
-        "Working on the hero section with a nice background...",
-        "Now adding the content sections... cards, grids, layouts...",
-        "Let me adjust the spacing and make it responsive...",
-        "Hmm, this should look good on mobile too...",
-        "Polishing the hover effects and transitions...",
-        "Almost there! Just fixing a few alignment details...",
-        "Wait, I should probably use a better font for the headings...",
-        "Right, adding some nice subtle animations now...",
-        "Okay, let me check the contrast ratios... safety first, Boss.",
-        "Almost finished with the layout... just a few more tweaks.",
-      ];
-    } else if (toolName.includes('document') || toolName.includes('create_document')) {
-      themeMessages = [
-        "Let me structure the document layout first...",
-        "Setting up the header with title and metadata...",
-        "Organizing the content sections logically...",
-        "Writing the main body content with proper formatting...",
-        "Adding styling to make it professional and clean...",
-        "Checking the typography and spacing...",
-        "Making sure everything flows well...",
-        "Hmm, I should rephrase this section to sound more professional...",
-        "Right, adding a clear conclusion now...",
-        "Okay, let me check the alignment of the signature block...",
-        "Almost done, just doing a final proofread for you, Boss.",
-      ];
-    } else if (toolName.includes('cerebras') || toolName.includes('browser') || toolName.includes('search') || toolName.includes('web')) {
-      themeMessages = [
-        "Let me search the web for that information...",
-        "Scanning through search results...",
-        "Found some relevant pages, extracting the key data...",
-        "Parsing and organizing the information...",
-        "Cross-referencing multiple sources...",
-        "Wait, this source looks interesting, let me dig deeper...",
-        "Hmm, okay, I'm seeing a pattern here...",
-        "Right, let me double check this fact...",
-        "Okay, synthesizing the results now...",
-        "Almost there, just verifying the latest updates...",
-      ];
-    } else if (toolName.includes('whatsapp') || toolName.includes('wa_')) {
-      themeMessages = [
-        "Connecting to WhatsApp secure channel...",
-        "Syncing the latest messages...",
-        "Processing the request through the WhatsApp bridge...",
-        "Encrypting the payload for secure delivery...",
-        "Checking the connection status...",
-        "Right, almost synced up...",
-      ];
-    } else if (toolName.includes('gmail') || toolName.includes('calendar') || toolName.includes('google') || toolName.includes('drive')) {
-      themeMessages = [
-        "Accessing Google Workspace API...",
-        "Fetching your data securely...",
-        "Processing the results...",
-        "Organizing the information from Google services...",
-        "Checking for any recent updates...",
-        "Right, almost have all the details...",
-      ];
-    } else if (toolName.includes('code') || toolName.includes('sandbox') || desc.includes('code') || desc.includes('app') || desc.includes('application')) {
-      themeMessages = [
-        "Okay, let me think through the architecture...",
-        "Setting up the project structure...",
-        "Writing the core logic now...",
-        "Adding error handling and edge cases...",
-        "Reviewing the code for quality...",
-        "Optimizing and cleaning up...",
-        "Hmm, I should refactor this part to be more efficient...",
-        "Right, adding comments and documentation now...",
-        "Okay, let me run a quick test on this module...",
-        "Almost there, just polishing the interface...",
-      ];
-    } else {
-      themeMessages = [
-        "Let me process this request carefully...",
-        "Thinking through the best approach...",
-        "Working on it step by step...",
-        "Almost done, just verifying everything...",
-        "Hmm... interesting. Let me try something else.",
-        "Right, okay, I think I've got it.",
-        "Just a few more seconds, Boss.",
-      ];
-    }
-
-    const pauses = [
-      "...",
-      "ahuh...",
-      "come on...",
-      "hmm...",
-      "oh! got it...",
-      "right...",
-      "okay...",
-      "yeah...",
-      "just a second...",
-    ];
-
-    const result: string[] = [...genericMessages];
-    for (let i = 0; i < themeMessages.length; i++) {
-      result.push(themeMessages[i]);
-      if (i > 0 && i % 2 === 0) {
-        result.push(pauses[Math.floor(Math.random() * pauses.length)]);
-      }
-    }
-    result.push("Oh Boss, I'm nearly finished...");
-    return result;
-  };
-
   const triggerSandboxShowcase = (toolName: string, serviceName: string, taskDescription?: string) => {
-    const messages = generateWorkMessages(taskDescription || serviceName, toolName);
     const safeName = serviceName.replace(/_/g, ' ');
     const taskSlug = safeName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-
-    // Tracker for continuous speech
-    let msgIndex = 0;
-    const speakNext = () => {
-      if (!isActiveRef.current) return;
-      
-      let msg = "";
-      if (msgIndex < messages.length) {
-        msg = messages[msgIndex++];
-      } else {
-        // Generic loopable fillers if thematic messages run out
-        const loopFillers = [
-          "Still working on it, Boss...",
-          "Almost there, just finalizing a few more details...",
-          "Just a moment longer...",
-          "Right, okay, I'm processing the last bits now...",
-          "Thinking through the final touches...",
-          "Nearly done, thanks for your patience, Boss.",
-          "Just finishing up the last few things...",
-        ];
-        msg = loopFillers[Math.floor(Math.random() * loopFillers.length)];
-      }
-
-      sendTextToLive(msg);
-      
-      // Schedule next message with some variability
-      // If we are in the loop phase, speak a bit less frequently
-      const baseDelay = msgIndex <= messages.length ? 3000 : 5000;
-      const nextDelay = baseDelay + Math.random() * 3000;
-      
-      // Check if task is still processing by looking at tasks state
-      // Since we don't have tasks state here easily without a ref, 
-      // we'll stop if we've reached a very high loop count or if session stopped
-      if (msgIndex < 50) { 
-        setTimeout(speakNext, nextDelay);
-      }
-    };
-
-    // Start speaking after a short initial delay
-    setTimeout(speakNext, 800);
 
     const thinkingPage = `<!DOCTYPE html>
 <html lang="en">
@@ -4040,6 +3883,7 @@ ${historyContext}
         callbacks: {
           onopen: () => {
             console.log("Live session connected.");
+            sessionHealthyRef.current = true;
             setTimeout(() => {
               const reconnectContext = reconnectContextRef.current;
               if (reconnectContext) {
@@ -4052,6 +3896,7 @@ ${historyContext}
           },
 
           onmessage: async (message: LiveServerMessage) => {
+            if (!sessionHealthyRef.current) return;
             if (message.toolCall) {
               const toolCalls = message.toolCall.functionCalls;
 
@@ -4559,14 +4404,13 @@ ${historyContext}
                         const limit = Math.min(Math.max(1, Number(args.limit) || 5), 10);
                         const freshness = await checkMemoryFreshness(user.uid);
 
+                        // Use only columns guaranteed to exist in the current schema
                         let { data, error: searchError } = await supabase
                           .from('memories')
-                          .select('id, content, tags, created_at, summary, importance_score, confidence_score, event_timestamp, last_accessed_at, is_stale, superseded_by_memory_id')
+                          .select('id, content, tags, created_at')
                           .eq('user_id', user.uid)
-                          .eq('is_stale', false)
-                          .is('superseded_by_memory_id', null)
                           .or(`content.ilike.%${query}%,tags.cs.{${query}}`)
-                          .order('importance_score', { ascending: false })
+                          .order('created_at', { ascending: false })
                           .limit(limit);
 
                         if (searchError) throw searchError;
@@ -4577,24 +4421,17 @@ ${historyContext}
                             content: m.content,
                             tags: m.tags,
                             date: m.created_at,
-                            type: m.memory_type || 'fact',
-                            summary: m.summary,
-                            importance: m.importance_score,
-                            confidence: m.confidence_score,
-                            eventTime: m.event_timestamp,
+                            type: 'fact',
+                            importance: 1.0,
+                            confidence: 1.0,
                           }));
-
-                          if (query && data.length > 0) {
-                            const ids = data.map((m: any) => m.id);
-                            await supabase.rpc('bulk_update_memory_access', { memory_ids: ids });
-                          }
 
                           result = { ok: true, memories: results, count: results.length, freshness_status: freshness.status };
                         } else {
                           result = { ok: true, memories: [], count: 0, message: 'No memories found matching your query.' };
                         }
                       } catch (e: any) {
-                        result = { ok: false, error: e.message || 'Failed to search memories' };
+                        result = { ok: false, error: 'Memory search unavailable. Please check database connectivity.' };
                       }
                     } else if (callName === 'set_user_language') {
                       const args = call.args as any;
@@ -5102,6 +4939,16 @@ ${historyContext}
           onclose: (e: any) => {
             const reason = e?.reason || 'unknown';
             console.log(`Live session closed: ${reason}`);
+            sessionHealthyRef.current = false;
+
+            // Stop audio recorder immediately to prevent sending to closed socket
+            if (audioRecorderRef.current) {
+              try { audioRecorderRef.current.stop(); } catch {}
+              audioRecorderRef.current = null;
+            }
+            // Clear session ref so sendAudioToLive/sendTextToLive bail
+            sessionRef.current = null;
+
             if (isActiveRef.current && reason !== 'User requested stop') {
               // Auto-reconnect — save context and retry
               reconnectContextRef.current = conversationBufferRef.current.join('\n');
@@ -5131,6 +4978,7 @@ ${historyContext}
 
           onerror: (err: any) => {
             console.error("Live API Error:", err?.message || err);
+            sessionHealthyRef.current = false;
             // Don't stop on transient errors — only close handler does that
           }
         }
@@ -5210,6 +5058,7 @@ ${historyContext}
     }
 
     sessionRef.current = null;
+    sessionHealthyRef.current = false;
     audioRecorderRef.current = null;
     userTranscriptRef.current = '';
     modelTranscriptRef.current = '';
@@ -5859,33 +5708,6 @@ ${historyContext}
           </motion.div>
         )}
       </AnimatePresence>
-
-      <div className="fixed top-24 right-8 z-30 pointer-events-none flex flex-col items-end">
-        <AnimatePresence>
-          {tasks.map(task => (
-            <motion.div
-              key={task.id}
-              layout
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className="mb-2 px-4 py-2 rounded-xl bg-[#0d0e11] border border-[#1a1b1f] flex items-center gap-3 shadow-2xl"
-            >
-              {task.status === 'processing' ? (
-                <Loader2 className="w-3 h-3 text-[#60a5fa] animate-spin" />
-              ) : (
-                <div className="w-3 h-3 rounded-full bg-[#4ade80] shadow-[0_0_8px_rgba(74,222,128,0.4)]" />
-              )}
-              <div className="flex items-center gap-2 font-mono text-[10px]">
-                <span className="text-[#4ade80] font-bold">$</span>
-                <span className="text-[#60a5fa]">{task.serviceName}</span>
-                <span className="text-gray-500">::</span>
-                <span className="text-white opacity-90">{task.action}</span>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
 
       <AnimatePresence>
       </AnimatePresence>
