@@ -1,317 +1,818 @@
 # Beatrice — AI Voice Agent by Eburon AI
 
-**Beatrice** is a real-time voice AI agent powered by the **Eburon Live API** with WhatsApp integration, multi-language support, persistent memory, unlimited document generation, Google Drive sync, sandbox sub-agent, Cerebras browser automation, and 10 specialized Belgian administrative tools. Built by [Eburon AI](https://eburon.ai).
+Beatrice is a full-stack real-time AI voice and WhatsApp agent built for local development, self-hosted deployment, and production operation. It combines a React/Vite frontend, an Express backend, WhatsApp linked-device support, persistent memory, workspace storage, document generation, browser automation, and an OpenCode-powered sandbox sub-agent.
 
 <p align="center">
   <a href="https://whatsapp.eburon.ai">
     <img src="https://img.shields.io/badge/Live%20App-whatsapp.eburon.ai-8A2BE2?style=for-the-badge" alt="Live App">
   </a>
   <a href="https://github.com/lovegold120221-dot/turbo-dollop">
-    <img src="https://img.shields.io/badge/GitHub-turbo--dollop-181717?style=for-the-badge&logo=github" alt="GitHub">
+    <img src="https://img.shields.io/badge/GitHub-turbo--dollop-181717?style=for-the-badge&logo=github" alt="GitHub Repository">
   </a>
 </p>
 
 ---
 
+## Table of Contents
+
+- [What Beatrice Does](#what-beatrice-does)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [One-Paste Local Install](#one-paste-local-install)
+- [Manual Local Development](#manual-local-development)
+- [Environment Configuration](#environment-configuration)
+- [Database Setup](#database-setup)
+- [Project Structure](#project-structure)
+- [Core Features](#core-features)
+- [Available Scripts](#available-scripts)
+- [WhatsApp Runtime](#whatsapp-runtime)
+- [Workspace and File Storage](#workspace-and-file-storage)
+- [PWA System](#pwa-system)
+- [Deployment](#deployment)
+- [Troubleshooting](#troubleshooting)
+- [Maintenance](#maintenance)
+- [License](#license)
+
+---
+
+## What Beatrice Does
+
+Beatrice is designed as an operational AI assistant that can:
+
+- Hold real-time voice sessions through a browser interface.
+- Pair with WhatsApp through Baileys linked-device sessions.
+- Read and process WhatsApp messages, contacts, media, documents, and voice notes.
+- Generate documents, websites, reports, proposals, forms, dashboards, and app artifacts.
+- Store user memory, chat state, settings, and generated outputs.
+- Run backend tools for Belgian administrative workflows.
+- Use a sandbox sub-agent for coding, browser automation, research, and file operations.
+- Sync generated workspace output locally and optionally to Google Drive.
+- Run locally, on a VPS, through Docker Compose, or through static frontend deployment plus backend API service.
+
+---
+
 ## Architecture
 
-```
-Frontend (React 19 + Vite)
-  ├─ Voice Pipeline (PCM16 WebSocket via AudioWorklet)
-  ├─ Chat Page (Eburon PC Sandbox)
-  ├─ WhatsApp Pairing / Chat List / Media Cache
-  ├─ Profile / Settings / Theme (Dark + Light)
-  ├─ Document Viewer (live sandbox log scenarios)
-  ├─ Workspace (IndexedDB + Google Drive sync)
-  └─ PWA (install prompt, versioned updates)
+```text
+Frontend: React 19 + Vite
+  ├─ Realtime voice UI
+  ├─ Chat and sandbox page
+  ├─ WhatsApp pairing and chat views
+  ├─ Profile, settings, memory, theme, and language controls
+  ├─ Document viewer and artifact display
+  ├─ IndexedDB workspace
+  └─ Progressive Web App shell
 
-Backend (Express + tsx)
-  ├─ Baileys WhatsApp Manager (server/whatsapp.ts)
-  ├─ Belgian Admin Tools (server/belgian-tools.ts)
-  ├─ Sandbox Sub-Agent Runner (OpenCode CLI, 21+ skills)
-  ├─ Cerebras Browser Automation
-  ├─ Ollama LLM Proxy (SSE streaming)
-  ├─ Workspace API (filesystem JSON persistence)
-  ├─ WhatsApp Media Cache (disk + CDN fallback)
-  ├─ Audio Transcription (Eburon API)
-  └─ Web Glance (DuckDuckGo)
-
-AI Layer
-  └─ Eburon Voice (Live API — text, vision, realtime voice)
+Backend: Express + Node 22 + tsx
+  ├─ REST API and health routes
+  ├─ Baileys WhatsApp manager
+  ├─ WhatsApp tool dispatch
+  ├─ Belgian administrative tools
+  ├─ Workspace persistence API
+  ├─ OpenCode terminal/sandbox runner
+  ├─ Browser automation bridge
+  ├─ Local model/Ollama bridge
+  ├─ File extraction and media cache
+  └─ Production static file server for dist/
 
 Data Layer
-  ├─ Supabase (PostgreSQL — memories, messages, settings, media)
-  ├─ Firebase Auth (Google OAuth)
-  ├─ IndexedDB (local workspace — primary store)
-  ├─ Google Drive (cloud workspace sync — Beatrice_Workspace folder)
-  └─ Filesystem workspace JSON (server-side backup)
+  ├─ Supabase/PostgreSQL
+  ├─ Firebase Auth
+  ├─ IndexedDB local workspace
+  ├─ Server filesystem workspace
+  ├─ WhatsApp media cache
+  └─ Optional Google Drive sync
 ```
 
-### Stack
+---
+
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| **Frontend** | React 19, Vite 6, Tailwind CSS v4, motion (Framer Motion), lucide-react |
-| **Backend** | Express 4, tsx runtime, Node 22+ |
-| **AI Voice** | Eburon Voice (Live API) |
-| **AI Text** | Eburon Core, Eburon Sandbox, Eburon Coder Pro, Eburon Worker |
-| **Auth** | Firebase Auth (Google OAuth) |
-| **Database** | Supabase (PostgreSQL + Storage) |
-| **WhatsApp** | Baileys (`@whiskeysockets/baileys`) |
-| **Browser Agent** | Browser-Use + Cerebras inference |
-| **Sub-Agent** | OpenCode CLI (deepseek-v4-flash-free, 21+ skills) |
-| **Hosting** | Ubuntu VPS + Docker Compose + NGINX (5 domains) |
+| Frontend | React 19, Vite 6, Tailwind CSS v4, motion, lucide-react |
+| Backend | Node.js 22, Express 4, tsx, TypeScript |
+| Realtime / Voice | Eburon Core voice/session routes |
+| Database | Supabase/PostgreSQL |
+| Auth | Firebase Auth |
+| WhatsApp | `@whiskeysockets/baileys` |
+| Local model runtime | Ollama |
+| Sandbox agent | OpenCode CLI with local skills |
+| Browser automation | Python venv, browser-use, Playwright Chromium |
+| Document/output tools | jsPDF, html2canvas, local workspace storage |
+| Deployment | Docker, Docker Compose, PM2, systemd, NGINX-compatible backend |
 
 ---
 
-## Features
+## One-Paste Local Install
 
-- **Real-Time Voice** — Low-latency PCM16 bidirectional audio via WebSocket with AudioWorkletNode (no ScriptProcessor), VAD, interruption handling, 5 voice profiles
-- **WhatsApp Integration** — Baileys-based pairing (QR/OTP), full history sync, media caching to disk, audio transcription, auto Belgian phone normalization, SSE real-time streaming. **Always resyncs history before any operation**
-- **Unlimited Document Generator** — ANY document type (contracts, reports, invoices, proposals, dashboards, presentations, policies, plans, analyses, forms, certificates). No template limits. CEO/presentation-grade output always — never placeholder text
-- **Google Drive Sync** — All generated outputs (documents, websites, apps) automatically uploaded to a `Beatrice_Workspace` folder on Google Drive
-- **Proactive Memory** — Beatrice automatically saves user preferences, facts, deadlines, and personal info via `add_to_memory`. Memories persist across sessions and are pre-loaded at session start
-- **Adjustable Context** — Conversation history slider (0–100 messages) controls how much past context Beatrice uses
-- **Sandbox Sub-Agent** — Delegate complex tasks to a cascading AI pipeline (Eburon Sandbox → Multimodal Pro → Cerebras → Coder Pro → Worker)
-- **OpenCode CLI Agent** — Full repository access via OpenCode CLI: read/write files, run commands, build apps, deploy via Dokploy. 21+ installed skills (Flutter, video production, browser automation, YouTube, TikTok, web scraping, machine access)
-- **Cerebras Browser Agent** — Automated web browsing via Browser-Use + Cerebras inference
-- **10 Belgian Admin Tools** — KBO/CBE lookup, VIES VAT validation, Peppol e-invoicing, tax calendar, registration tax calc, itsme navigator, language bridge (FR/NL/EN), social security navigator, labor law simplifier, mobility planner (NMBS/SNCB)
-- **Multi-Language** — 147 languages, Flemish (nl-BE) primary, voice-driven language switching
-- **Live Sandbox Log Viewer** — Progressive log scenarios (terminal, sandbox, browser, document, website) shown in DocumentViewer while tools run
-- **Unified Skills Catalog** — Beatrice categorizes all tools into 10 skill groups with trigger-based routing, speaks naturally before long tasks, never leaves dead silence
-- **Full Dark + Light Themes** — CSS custom properties, 70+ override rules
-- **Content Filtering Toggle** — Disable censorship via Profile settings
-- **Progressive Web App** — Full PWA with offline support, install banner, update detection with version tracking
+The installer is intended for a fresh local machine or VPS and installs the app plus its local runtime dependencies.
 
-### Workspace System
-Every output Beatrice produces is automatically saved:
+### macOS / Debian / Ubuntu
 
-| Output Type | IndexedDB | Server JSON | Google Drive |
-|---|---|---|---|
-| Documents (create_document) | ✅ | ✅ | ✅ (redirect HTML) |
-| Websites (generate_website) | ✅ | ✅ | ✅ (redirect HTML) |
-| Apps (open_terminal_skills) | ✅ | ✅ | ✅ (redirect HTML) |
-| Screen captures | ✅ | ✅ | ❌ |
-| Images | ✅ | ✅ | ✅ (binary) |
+Run this command in Terminal:
 
----
-
-## Quick Start
-
-### One-Paste Install (Freshly Formatted Machine)
-Works on macOS, Debian, Ubuntu, and Windows. Installs Node.js 22, Python 3.11, Chromium, Git, all dependencies, and runs the app.
-
-**macOS / Debian / Ubuntu:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lovegold120221-dot/turbo-dollop/main/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/lovegold120221-dot/turbo-dollop/main/bootstrap.sh | BEATRICE_INSTALL_DIR="$HOME/beatrice" bash
 ```
 
-**Windows (PowerShell as Administrator):**
+This downloads `bootstrap.sh`, detects macOS or Linux, downloads `install.sh` from the selected branch, installs local dependencies, clones the repository into `~/beatrice`, builds the frontend, creates a launcher, verifies tools, and starts the backend at:
+
+```text
+http://localhost:4200
+```
+
+### Windows PowerShell
+
+Run PowerShell as Administrator:
+
 ```powershell
 irm https://raw.githubusercontent.com/lovegold120221-dot/turbo-dollop/main/install.ps1 | iex
 ```
 
-After install completes, edit `~/beatrice/.env` (macOS/Linux) or `%USERPROFILE%\beatrice\.env` (Windows) to fill in your API keys, then restart with `cd ~/beatrice && ./start.sh` (or `start.bat` on Windows). The app runs at `http://localhost:4200`.
+The Windows installer uses `%USERPROFILE%\beatrice` by default and creates `start.bat`.
 
-On Linux, if run as root, the installer registers a systemd service (`beatrice.service`) that auto-starts on boot.
+### Optional installer overrides
 
-### Prerequisites (Manual Install)
-- Node.js 22+
-- Python 3.11+ with pip and venv
-- Chromium or Chrome (for Playwright/browser-use)
-- Git
-- An Eburon Core API key
-- A Supabase project
-- A Firebase project (for auth)
+Install into a custom folder:
 
-### Local Development
+```bash
+curl -fsSL https://raw.githubusercontent.com/lovegold120221-dot/turbo-dollop/main/bootstrap.sh | BEATRICE_INSTALL_DIR="$HOME/apps/beatrice" bash
+```
+
+Install from a different branch:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lovegold120221-dot/turbo-dollop/main/bootstrap.sh | BEATRICE_BRANCH="main" BEATRICE_INSTALL_DIR="$HOME/beatrice" bash
+```
+
+Install from a fork:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lovegold120221-dot/turbo-dollop/main/bootstrap.sh | \
+  BEATRICE_REPO_OWNER="lovegold120221-dot" \
+  BEATRICE_REPO_NAME="turbo-dollop" \
+  BEATRICE_BRANCH="main" \
+  BEATRICE_INSTALL_DIR="$HOME/beatrice" \
+  bash
+```
+
+### What the one-paste installer installs
+
+| Component | Purpose |
+|---|---|
+| Git | Clone/update repository |
+| Node.js 22 | Frontend and backend runtime |
+| npm dependencies | React, Express, Baileys, Supabase, Firebase, Vite, TypeScript |
+| Python 3.11 venv | Browser automation tooling |
+| Playwright Chromium | Browser-use automation runtime |
+| Docker + Compose | Containerized runtime/deployment support |
+| PostgreSQL client | Supabase migration/client support |
+| Supabase CLI | Local Supabase development support |
+| ffmpeg | Audio/media processing |
+| Ollama | Local model runtime bridge |
+| OpenCode CLI | Sandbox sub-agent runtime |
+| PM2 | Process management |
+| `/data/*` directories | Local server storage for workspace/media/session files |
+
+### After install
+
+Edit your environment file:
+
+```bash
+nano ~/beatrice/.env
+```
+
+Then restart:
+
+```bash
+cd ~/beatrice
+./start.sh
+```
+
+On Windows:
+
+```powershell
+cd $env:USERPROFILE\beatrice
+.\start.bat
+```
+
+---
+
+## Manual Local Development
+
+Use this path when you already have Node.js, Git, Python, and local tooling installed.
+
 ```bash
 git clone https://github.com/lovegold120221-dot/turbo-dollop.git
 cd turbo-dollop
-npm install
-
+npm ci
 cp .env.example .env
-# Add your API keys: EBURON_CORE_KEY, SUPABASE_*, FIREBASE_*
-
-npm run dev:full     # Frontend :3000 + Backend :4200
-# Or separately:
-npm run dev          # Frontend only
-npm run dev:api      # Backend only
+npm run dev:full
 ```
 
-### Database Setup
-Run in Supabase SQL Editor:
-1. `supabase-migration-settings.sql` — fixes `user_settings` schema
-2. `supabase-migration-memories.sql` — creates `memories` table
+Development URLs:
+
+```text
+Frontend: http://localhost:3000
+Backend:  http://localhost:4200
+Health:   http://localhost:4200/api/health
+```
+
+Run frontend and backend separately:
+
+```bash
+npm run dev
+npm run dev:api
+```
+
+Production-style local run:
+
+```bash
+npm run build
+PORT=4200 NODE_ENV=production npm start
+```
+
+---
+
+## Environment Configuration
+
+Create `.env` from `.env.example` and set the runtime values used by your installation.
+
+```bash
+cp .env.example .env
+```
+
+### Required for normal app operation
+
+| Variable | Required | Used by | Purpose |
+|---|---:|---|---|
+| `EBURON_CORE_KEY` | Yes | Backend | Core AI session, text, voice, vision, transcription routes |
+| `VITE_SUPABASE_URL` | Yes | Frontend build | Public Supabase project endpoint |
+| `VITE_SUPABASE_ANON_KEY` | Yes | Frontend build | Public Supabase anon key |
+| `SUPABASE_URL` | Recommended | Backend | Server-side Supabase endpoint |
+| `SUPABASE_PUBLISHABLE_KEY` | Recommended | Backend | Server-side Supabase publishable/anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Optional/admin | Backend repositories | Admin database operations where enabled |
+| `VITE_FIREBASE_API_KEY` | Yes | Frontend build | Firebase Auth |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Yes | Frontend build | Firebase Auth domain |
+| `VITE_FIREBASE_PROJECT_ID` | Yes | Frontend build | Firebase project |
+| `VITE_FIREBASE_STORAGE_BUCKET` | Yes | Frontend build | Firebase storage bucket |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Yes | Frontend build | Firebase sender ID |
+| `VITE_FIREBASE_APP_ID` | Yes | Frontend build | Firebase app ID |
+| `GOOGLE_CLIENT_ID` | Optional | Frontend/backend | Google OAuth / Drive flows |
+| `GOOGLE_CLIENT_SECRET` | Optional | Frontend/backend | Google OAuth / Drive flows |
+| `PORT` | Optional | Backend | Defaults to `4200` |
+| `VITE_BACKEND_URL` | Optional | Frontend | Defaults to `http://localhost:4200` locally |
+| `VITE_SANDBOX_URL` | Optional | Frontend | Defaults to backend URL locally |
+
+### WhatsApp and workspace variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `WA_AUTH_ROOT` | `./baileys_auth` locally, `/data/baileys` in Docker | Baileys linked-device session storage |
+| `WA_LOG_LEVEL` | `info` locally, `silent` in Docker | WhatsApp logger level |
+| `WA_SYNC_FULL_HISTORY` | `true` in WhatsApp env | Enables larger history sync behavior |
+| `WA_HISTORY_LIMIT` | `50000` in WhatsApp env | Maximum local history fetch target |
+| `WA_HISTORY_RESPONSE_LIMIT` | `2000` | Maximum response window for history APIs |
+| `WA_MEDIA_CACHE_DIR` | `/data/wa-media` | WhatsApp downloaded media cache |
+| `WORKSPACE_DATA_DIR` | `/data/workspace` | Server JSON workspace storage |
+| `BEATRICE_WORKSPACE_DIR` | `/data/beatrice-workspace` | Generated artifact workspace |
+| `BEATRICE_PUBLIC_URL` | Production domain | Public base URL for generated/media links |
+
+### Local model and sandbox variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API endpoint |
+| `OPENCODE_PATH` | `/root/.opencode/bin/opencode` | OpenCode binary path |
+| `OPENCODE_MODEL` | Configured Eburon sandbox model alias | Sandbox model selection |
+| `OPEN_TERMINAL_WORKDIR` | Repository root | Working directory for terminal tasks |
+| `CEREBRAS_API_KEY` | Empty | Browser automation integration |
+| `CEREBRAS_PYTHON` | `.venv/bin/python3` | Python runtime for browser scripts |
+
+---
+
+## Database Setup
+
+### Remote Supabase
+
+Apply the SQL files through the Supabase SQL editor in this order when using the legacy root migrations:
+
+```text
+supabase-migration.sql
+supabase-migration-settings.sql
+supabase-migration-memories.sql
+supabase-migration-memory-v2.sql
+supabase-migration-fix-rls.sql
+websites-migration.sql
+```
+
+### Supabase CLI local development
+
+The repository also includes Supabase CLI structure under `supabase/`.
+
+```bash
+supabase start
+supabase db reset
+supabase migration up
+```
+
+Useful local Supabase URLs:
+
+```text
+API:    http://127.0.0.1:54321
+Studio: http://127.0.0.1:54323
+```
+
+Stop local Supabase:
+
+```bash
+supabase stop
+```
 
 ---
 
 ## Project Structure
 
+```text
+.
+├── bootstrap.sh                         # Universal curl bootstrap for macOS/Linux
+├── install.sh                           # macOS/Linux full local installer
+├── install.ps1                          # Windows full local installer
+├── package.json                         # npm scripts and dependencies
+├── vite.config.ts                       # Vite + React + Tailwind configuration
+├── tsconfig.json                        # TypeScript configuration
+├── Dockerfile                           # Generic production image
+├── Dockerfile.whatsapp                  # WhatsApp/backend production image
+├── docker-compose.whatsapp.yml          # WhatsApp backend compose runtime
+├── docker-compose.dokploy.yml           # Dokploy-compatible deployment compose
+├── ecosystem.config.cjs                 # PM2 production runtime
+├── ecosystem.config.selfhosted.cjs      # PM2 self-hosted runtime
+├── firebase.json                        # Firebase Hosting configuration
+├── functions/                           # Firebase Functions proxy/runtime
+├── public/                              # Static assets, PWA manifest, service worker
+├── scripts/                             # Smoke checks and browser automation scripts
+├── server/                              # Express backend, WhatsApp, tools, DB repos
+├── src/                                 # React frontend application
+├── supabase/                            # Supabase CLI config and migrations
+├── *.sql                                # Root SQL migration helpers
+└── README.md                            # Project documentation
 ```
+
+### Frontend highlights
+
+```text
 src/
 ├── components/
-│   ├── BeatriceAgent.tsx       # Main agent: voice, tools, session lifecycle, system prompt
-│   ├── ChatPage.tsx            # Text chat with sandbox viewer
-│   ├── VideoPage.tsx           # Camera + screen sharing
-│   ├── ProfilePage.tsx         # Persona, language, memory, workspace settings
-│   ├── AuthPage.tsx            # Login / register
-│   ├── WhatsApp*.tsx           # Pairing, onboarding, settings, chat list
-│   ├── PWAInstallPrompt.tsx    # PWA install banner
-│   ├── PWAUpdatePrompt.tsx     # PWA update banner
-│   ├── DocumentViewer.tsx      # Sandbox log viewer + artifact display
-│   └── ...
-├── hooks/
-│   └── usePWA.ts               # PWA lifecycle hook (install/update/version)
-├── lib/
-│   ├── audio.ts                # AudioStreamer + AudioRecorder (AudioWorkletNode)
-│   ├── supabase.ts             # Supabase client
-│   ├── workspace.ts            # IndexedDB workspace + Google Drive upload
-│   └── whatsappClient.ts       # WhatsApp API client
-├── version.ts                  # App versioning (VERSION_KEY, APP_VERSION)
-├── constants.ts                # 147-language LANGUAGES array
-├── firebase.ts                 # Firebase init
-└── index.css                   # Tailwind v4 + theme system
+│   ├── BeatriceAgent.tsx                # Main voice/session/tool lifecycle
+│   ├── ChatPage.tsx                     # Text chat and sandbox display
+│   ├── VideoPage.tsx                    # Camera/screen-sharing page
+│   ├── ProfilePage.tsx                  # Persona, memory, language, theme controls
+│   ├── AuthPage.tsx                     # Login/register UI
+│   ├── WhatsApp*.tsx                    # WhatsApp pairing, onboarding, settings, chats
+│   ├── DocumentViewer.tsx               # Artifact/log viewer
+│   ├── PWAInstallPrompt.tsx             # PWA installation prompt
+│   └── PWAUpdatePrompt.tsx              # PWA update prompt
+├── hooks/usePWA.ts                      # PWA registration/update lifecycle
+├── lib/audio.ts                         # Audio streaming and recording helpers
+├── lib/supabase.ts                      # Browser Supabase client
+├── lib/workspace.ts                     # IndexedDB workspace utilities
+├── lib/whatsappClient.ts                # Browser WhatsApp API client
+├── firebase.ts                          # Firebase initialization
+├── constants.ts                         # Language and shared constants
+├── version.ts                           # App version metadata
+└── index.css                            # Tailwind/theme system
+```
 
+### Backend highlights
+
+```text
 server/
-├── index.ts                    # Express: all API routes (workspace, media, terminal, sandbox)
-├── whatsapp.ts                 # WhatsAppManager (Baileys) with media cache
-├── whatsapp-tools.ts           # Permission-gated tool dispatch
-├── belgian-tools.ts            # 10 Belgian admin tools
-├── file-extractor.ts           # File content extraction (documents, images, media)
-├── db/
-│   ├── workspace-storage.ts    # Filesystem workspace persistence
-│   └── repositories/           # 6 DB repos (memories, messages, whatsapp, media, settings, eburon)
-└── supabase.ts                 # Server Supabase client
-
-functions/src/index.ts          # Firebase Cloud Function proxy to VPS (168.231.78.113:4200)
-scripts/
-├── cerebras_browser.py         # Browser-Use + Cerebras wrapper
-└── setup-cerebras.sh           # Python dep installer
-
-public/
-├── manifest.json               # PWA manifest
-├── sw.js                       # Service worker (versioned caching, update detection)
-├── icon-eburon.svg             # App icon
-└── *-template.html             # Legacy document templates (deprecated — sandbox generates directly)
+├── index.ts                             # Main Express API server
+├── whatsapp.ts                          # Baileys session manager and media handling
+├── whatsapp-tools.ts                    # WhatsApp tool routing and permissions
+├── belgian-tools.ts                     # Belgian administrative utilities
+├── file-extractor.ts                    # File/media content extraction
+├── eburon-provider.ts                   # Eburon provider adapter
+├── supabase.ts                          # Server Supabase client
+└── db/
+    ├── admin.ts                         # Admin Supabase client
+    ├── server.ts                        # Server Supabase client helpers
+    ├── workspace-storage.ts             # Filesystem workspace persistence
+    └── repositories/                    # Messages, memory, media, settings repos
 ```
 
 ---
 
-## Skills Catalog
+## Core Features
 
-Beatrice organizes her capabilities into 10 skill categories, each with natural trigger phrases:
+### Real-time voice agent
 
-| Skill | Triggers |
+- Browser-based voice session UI.
+- AudioWorklet-based audio processing.
+- Interruption-aware conversational loop.
+- Voice/persona configuration through the profile interface.
+- Language-aware runtime behavior.
+
+### WhatsApp integration
+
+- Baileys linked-device pairing.
+- QR/OTP pairing UI flow.
+- Session persistence through `WA_AUTH_ROOT`.
+- Media cache for images, audio, and documents.
+- WhatsApp chat list and message retrieval routes.
+- Tool dispatch layer for sending messages and reading history.
+
+### Memory and profile
+
+- User settings and profile preferences.
+- Persistent memory records.
+- Context-size controls.
+- Theme and language preferences.
+- Memory repository layer under `server/db/repositories`.
+
+### Workspace and artifact generation
+
+- Local IndexedDB workspace in the browser.
+- Server filesystem workspace backup.
+- Generated document/artifact storage.
+- Optional Google Drive sync flow.
+- Artifact viewer through `DocumentViewer`.
+
+### Sandbox sub-agent
+
+- OpenCode CLI integration.
+- Configurable working directory.
+- Local skills folder under `.opencode/skills`.
+- Terminal-style progressive logs.
+- Coding, browser, research, and artifact-generation support.
+
+### Belgian administrative tools
+
+Includes routes/utilities for Belgian administrative workflows such as business lookup, VAT validation, invoicing support, tax calendar assistance, registration tax calculations, language bridging, social security navigation, labor-law simplification, and mobility planning.
+
+---
+
+## Available Scripts
+
+| Command | Purpose |
 |---|---|
-| **Communication** | "send", "message", "WhatsApp", "chat with" |
-| **Google Workspace** | "email", "calendar", "drive", "task", "YouTube" |
-| **Belgian Admin** | "company", "VAT", "invoice", "tax", "itsme", "NMBS" |
-| **Memory** | "remember", "save this", "do you remember" |
-| **Media Understanding** | "look at this image", "read this page", "transcribe" |
-| **WhatsApp Attachments** | file/image/document/voice note in WhatsApp |
-| **Deep Research** | "analyze", "research", "draft a report", "investigate" |
-| **App Building & Coding** | "build me an app", "create a website", "use OpenCode" |
-| **Web Browsing** | "go to this website", "scrape", "fill form" |
-| **Document Creation** | "create a document", "draft a letter", "make a proposal" |
+| `npm run dev` | Start Vite frontend on port `3000` |
+| `npm run dev:api` | Start Express backend on port `4200` |
+| `npm run dev:full` | Start backend and frontend together |
+| `npm run build` | Build frontend into `dist/` |
+| `npm run preview` | Preview Vite production build |
+| `npm run start` | Start backend with `tsx server/index.ts` |
+| `npm run lint` | TypeScript check with `tsc --noEmit` |
+| `npm run clean` | Remove `dist/` |
+| `npm run docker:whatsapp:build` | Build WhatsApp Docker image |
+| `npm run docker:whatsapp:up` | Start WhatsApp Docker Compose runtime |
+| `npm run docker:whatsapp:down` | Stop WhatsApp Docker Compose runtime |
+| `npm run smoke:whatsapp` | Run WhatsApp server smoke check |
+| `npm run db:start` | Start local Supabase |
+| `npm run db:stop` | Stop local Supabase |
+| `npm run db:reset` | Reset local Supabase database |
+| `npm run db:migrate` | Apply local Supabase migrations |
+| `npm run db:studio` | Print Supabase Studio URL |
+| `npm run check:eburon-branding` | Check branding constraints |
 
-OpenCode CLI agent has 21+ installed skills: ai-video-cinema, ai-video-generation, ai-video-production, browser-act, flutter-dev, himalaya, machine-access, macbook, mobile-pwa-design, google-search-serp, youtube-search, youtube-transcript, tiktok-contents, web-page-marker, open-search-code-lm, gmail-accounts, browser-act-skill-forge, dokploy-deploy, eburon-meeting-app, epi-knowledge, and appinsights-instrumentation.
+---
+
+## WhatsApp Runtime
+
+### Local linked-device runtime
+
+1. Start the backend.
+2. Open the app.
+3. Go to the WhatsApp pairing screen.
+4. Pair using the QR/OTP flow.
+5. Keep `WA_AUTH_ROOT` persisted so the session survives restarts.
+
+Default local values:
+
+```env
+WA_AUTH_ROOT=./baileys_auth
+WA_LOG_LEVEL=info
+VITE_BACKEND_URL=http://localhost:4200
+VITE_SANDBOX_URL=http://localhost:4200
+```
+
+### Docker WhatsApp runtime
+
+Create `.env.whatsapp` from `.env.whatsapp.example`:
+
+```bash
+cp .env.whatsapp.example .env.whatsapp
+```
+
+Build and start:
+
+```bash
+npm run build
+docker compose -f docker-compose.whatsapp.yml up -d --build
+```
+
+Stop:
+
+```bash
+docker compose -f docker-compose.whatsapp.yml down
+```
+
+Logs:
+
+```bash
+docker logs -f voxx-zero-whatsapp
+```
+
+Health check:
+
+```bash
+curl http://localhost:4200/api/health
+```
+
+---
+
+## Workspace and File Storage
+
+| Storage | Default | Purpose |
+|---|---|---|
+| Browser IndexedDB | Browser profile | Fast local workspace state |
+| Server workspace JSON | `/data/workspace` | Backend backup of generated outputs |
+| Beatrice workspace | `/data/beatrice-workspace` | Generated documents/sites/apps |
+| WhatsApp auth | `/data/baileys` or `./baileys_auth` | Linked-device credentials |
+| WhatsApp media | `/data/wa-media` | Downloaded images/audio/documents |
+| Google Drive | `Beatrice_Workspace` | Optional cloud sync destination |
+
+For local install, the installer creates:
+
+```text
+/data/baileys
+/data/beatrice-workspace
+/data/wa-media
+/data/workspace
+~/beatrice/baileys_auth
+```
 
 ---
 
 ## PWA System
 
-Beatrice is a fully installable Progressive Web App with smart version management:
+Beatrice includes an installable Progressive Web App shell.
 
-- **Install Prompt** — On first visit (or if not installed), a polished install banner appears at the bottom of the screen
-- **Update Detection** — When already installed, the service worker checks its version against `APP_VERSION` (from `src/version.ts`). If a newer version exists, an "Update Available" banner prompts the user to refresh
-- **Version Tracking** — After successful install, the version is stored in `localStorage` at `beatrice_app_version`. Subsequent visits compare this against the current `APP_VERSION`
-- **Cache Management** — The service worker registers at `/sw.js` and caches all static assets with version-aware cache names
+- `public/manifest.json` defines install metadata.
+- `public/sw.js` handles static caching and update detection.
+- `src/hooks/usePWA.ts` registers the service worker.
+- `src/version.ts` stores the app version/build metadata.
+- `PWAInstallPrompt` and `PWAUpdatePrompt` handle user-facing install/update banners.
 
-### Versioning
-The app version is maintained in `src/version.ts`:
+Update version before a new release:
+
 ```ts
-export const APP_VERSION = '1.0.0';  // Bump on every deploy
-export const APP_BUILD = 1;           // Incremental build number
+export const APP_VERSION = '1.0.1';
+export const APP_BUILD = 2;
 ```
-To push a new version to all installed users, bump `APP_VERSION` and rebuild.
+
+Then rebuild:
+
+```bash
+npm run build
+```
 
 ---
 
 ## Deployment
 
-### VPS (Production — Current)
+### Production backend / VPS
+
 ```bash
-npm run build                      # Pre-build frontend (required)
-docker compose -f docker-compose.whatsapp.yml up -d --build
+npm ci
+npm run build
+PORT=4200 NODE_ENV=production npm start
 ```
-Docker container on port 4200 behind NGINX reverse proxy with Let's Encrypt. Production URL: `https://whatsapp.eburon.ai`.
+
+Recommended process manager:
+
+```bash
+pm2 start ecosystem.config.cjs
+pm2 save
+pm2 logs
+```
 
 ### Docker Compose
-```bash
-# Build and start
-docker compose -f docker-compose.whatsapp.yml up -d --build
 
-# Stop
-docker compose -f docker-compose.whatsapp.yml down
+```bash
+npm run build
+docker compose -f docker-compose.whatsapp.yml up -d --build
 ```
 
-### Dokploy (Alternative)
-See `.opencode/skills/dokploy-deploy/SKILL.md`. Deploy via:
-- **Docker Compose**: Dokploy reads `docker-compose.dokploy.yml` from the repo
-- **Application**: Single service using `Dockerfile`, health check `/api/health`
-Note: Dokploy's Traefik needs ports 80/443 (currently used by NGINX). Not recommended unless you migrate all 5 NGINX domains into Dokploy's ingress.
+### Dokploy
 
-### Firebase Hosting (Static Frontend)
+Use `docker-compose.dokploy.yml` or the included Dockerfile depending on how the Dokploy app is configured. Build the frontend before deploying Docker images that copy `dist/`.
+
+### Firebase Hosting
+
 ```bash
+npm run build
 firebase deploy --only hosting
 ```
-API routes are proxied through the Firebase function (`functions/src/index.ts`) to the VPS backend at `168.231.78.113:4200`.
 
-### Functions (Node 20)
+### Firebase Functions
+
 ```bash
-npm --prefix functions run build && firebase deploy --only functions
+npm --prefix functions install
+npm --prefix functions run build
+firebase deploy --only functions
 ```
 
-### Alternative Platforms
-- **Vercel** — `vercel.json` (SPA rewrite, Vite build)
-- **Render** — `render.yaml` (web service, health check `/api/health`)
+### Vercel / Render
+
+The repository includes:
+
+```text
+vercel.json
+render.yaml
+```
+
+Use these for alternative static/frontend or web-service deployments.
 
 ---
 
-## Environment Variables
+## Troubleshooting
 
-| Variable | Required | Purpose |
-|---|---|---|
-| `EBURON_CORE_KEY` | ✅ | Eburon Live API |
-| `SUPABASE_URL` | ✅ | Supabase project URL |
-| `SUPABASE_PUBLISHABLE_KEY` | ✅ | Supabase anon key |
-| `VITE_FIREBASE_*` | ✅ | Firebase config (API key, auth domain, project ID, etc.) |
-| `GOOGLE_CLIENT_ID` | ✅ | Google OAuth |
-| `GOOGLE_CLIENT_SECRET` | ✅ | Google OAuth |
-| `CEREBRAS_API_KEY` | ⬜ | Browser automation (Cerebras) |
-| `OLLAMA_BASE_URL` | ⬜ | Local LLM proxy endpoint |
-| `OPENCODE_PATH` | ⬜ | Sandbox sub-agent CLI path |
-| `WHATSAPP_*` | ⬜ | WhatsApp Cloud API (optional alternative to Baileys) |
-| `WORKSPACE_DATA_DIR` | ⬜ | Workspace filesystem path (default `/data/workspace`) |
-| `BEATRICE_WORKSPACE_DIR` | ⬜ | App workspace path (default `/data/beatrice-workspace`) |
+### Installer starts but skips Linux/macOS dependency steps
 
-See `.env.example` for a complete template.
+Make sure `install.sh` calls `detect_os` at the start of `main()`:
+
+```bash
+grep -n "detect_os" install.sh
+```
+
+Expected result should include one line inside the function definition and one line inside `main()`.
+
+### Port 4200 already in use
+
+```bash
+lsof -i :4200
+PORT=4300 npm start
+```
+
+If changing the backend port, also update frontend environment values:
+
+```env
+VITE_BACKEND_URL=http://localhost:4300
+VITE_SANDBOX_URL=http://localhost:4300
+```
+
+### Frontend opens but backend calls fail
+
+Check backend health:
+
+```bash
+curl http://localhost:4200/api/health
+```
+
+Check local `.env` values:
+
+```bash
+cat .env | grep -E "VITE_BACKEND_URL|VITE_SANDBOX_URL|PORT"
+```
+
+### Supabase errors in browser
+
+Confirm these values exist before building the frontend:
+
+```env
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+```
+
+Then rebuild:
+
+```bash
+npm run build
+```
+
+### Server-side Supabase operations fail
+
+Confirm backend values exist:
+
+```env
+SUPABASE_URL=
+SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+Restart backend after editing `.env`.
+
+### WhatsApp session is lost after restart
+
+Confirm `WA_AUTH_ROOT` points to a persistent folder:
+
+```env
+WA_AUTH_ROOT=./baileys_auth
+```
+
+For Docker, confirm the `whatsapp_auth` volume exists:
+
+```bash
+docker volume ls | grep whatsapp_auth
+```
+
+### Playwright or browser automation fails
+
+Reinstall Python browser dependencies:
+
+```bash
+cd ~/beatrice
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m playwright install chromium
+```
+
+### Docker command requires sudo on Linux
+
+Add your user to the Docker group and re-login:
+
+```bash
+sudo usermod -aG docker "$USER"
+```
+
+### PM2 logs
+
+```bash
+pm2 logs
+pm2 status
+```
+
+### systemd logs on Linux root install
+
+```bash
+journalctl -u beatrice -f
+```
 
 ---
 
-## CI / CD
+## Maintenance
 
-`.github/workflows/android-distribution.yml` — On push to `main`:
-1. Builds web app
-2. Deploys to Firebase Hosting
-3. Builds Android APK via Bubblewrap (Trusted Web Activity)
-4. Uploads to Firebase App Distribution
+### Update local install
+
+```bash
+cd ~/beatrice
+git fetch --all
+git reset --hard origin/main
+git clean -fdx
+npm ci
+npm run build
+./start.sh
+```
+
+Or rerun the one-paste installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lovegold120221-dot/turbo-dollop/main/bootstrap.sh | BEATRICE_INSTALL_DIR="$HOME/beatrice" bash
+```
+
+### Rebuild Docker runtime
+
+```bash
+npm run build
+docker compose -f docker-compose.whatsapp.yml down
+docker compose -f docker-compose.whatsapp.yml up -d --build
+```
+
+### Backup local runtime data
+
+```bash
+tar -czf beatrice-data-backup.tgz \
+  ~/beatrice/.env \
+  ~/beatrice/baileys_auth \
+  /data/baileys \
+  /data/beatrice-workspace \
+  /data/wa-media \
+  /data/workspace
+```
+
+### Clean generated build output
+
+```bash
+npm run clean
+npm run build
+```
+
+---
+
+## Security Notes
+
+- Keep `.env`, WhatsApp auth folders, Supabase service keys, and OAuth credentials private.
+- Do not commit live secrets.
+- Review remote installer scripts before running them on production systems.
+- Use HTTPS and a reverse proxy for public deployments.
+- Keep `/data/baileys` and WhatsApp session storage backed up but protected.
+- Run production deployments behind a process manager and firewall.
 
 ---
 
 ## License
 
-Private Project — Eburon AI / Beatrice
+Private Project — Eburon AI / Beatrice.
 
-Built by [Eburon AI](https://eburon.ai) — founded by Jo Lernout.
+Built by Eburon AI.
