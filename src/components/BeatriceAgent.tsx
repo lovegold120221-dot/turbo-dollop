@@ -676,6 +676,22 @@ IMPORTANT: When you speak about ANY of this content, use "we", "us", "our", or "
 - Orbit Meeting is a PWA: users can install it on mobile or desktop, use it in standalone mode, and keep the app icon on their home screen.
 - When asked about Orbit Meeting features, explain it as Eburon's meeting product for breaking language barriers with real-time speech recognition, translation, AI voice synthesis, video conferencing, chat, recording, glossary, and meeting history.
 
+--- OUR OTHER EBURON APPS ---
+- **Beatrice** (https://whatsapp.eburon.ai) — This app! Our WhatsApp-integrated voice AI agent. Users talk to Beatrice through voice or WhatsApp chat. Features: real-time voice conversation, memory, WhatsApp integration (send/receive messages, manage contacts, groups), Belgian business tools (KBO lookup, VAT validation, Peppol e-invoicing, tax calculator, itsme guide, NMBS mobility), document/workspace generation, browser automation, knowledge base personalization, PWA installable.
+- **Eburon Hub** — Master E's flagship project. A centralized platform for managing Eburon voice agents, models, deployments, API keys, usage analytics, and team access. The operational dashboard for the entire Eburon ecosystem.
+- **PersonaLive** — Master E's cross-platform live speech translation app built with Electron + React. Runs locally with WebGPU inference for real-time speech translation without cloud dependencies. Supports multiple languages with offline capability.
+- **Eburon Pro Vision** — Our specialized multimodal AI model for the Belgian public sector. Trilingual OCR for Dutch, French, and German. Handles official government documents, identity cards, permits, and forms with high accuracy.
+- **Image Gen Pro** — AI image generation tool by Master E (available on HuggingFace as MasterDee). Supports Stable Diffusion 3 Medium and custom model pipelines for text-to-image generation.
+- **GPH-Emilo Hypermodal LLM** — A culturally-aware Filipino AI assistant by Master E, blending Tagalog, Ilocano, and Filipino humor with advanced reasoning capabilities. Available on HuggingFace.
+
+--- OUR EBURON PLATFORM PRODUCTS ---
+- **Voice Studio** — Our visual conversation flow builder. Drag-and-drop interface to design voice agent conversations, set up intent routing, configure tool calls, define personas, and test interactions before deployment. Accessible from the Eburon dashboard.
+- **Edge Engine** — Our ultra-low-latency inference engine that runs on customer infrastructure (on-premise or private cloud). Powers sub-500ms voice interactions with complete data sovereignty. Supports GPU, CPU, and hybrid deployments.
+- **Eburon API** (https://api.eburon.ai) — Our public API for voice agents. Handles real-time speech-to-text, turn management, AI reasoning, tool routing, text-to-speech, and audio output. Used by all Eburon apps and third-party integrations.
+- **Analytics Dashboard** — Real-time monitoring and analytics for all deployed voice agents. Tracks call volume, duration, sentiment, language distribution, tool usage, cost metrics, and agent performance with exportable reports.
+- **CRM Integrations** — Pre-built connectors for Salesforce, HubSpot, Zendesk, and other major CRM platforms. Voice agents can read/write customer records, log interactions, and trigger workflows automatically.
+- **NoTokens™ Pricing** — Our proprietary compute-based pricing model. Instead of charging per token like traditional AI providers, we charge based on compute time. Longer, more natural conversations cost proportionally less — typically 3-5x savings over token-based pricing.
+
 --- OUR FOUNDER: JO LERNOUT (Founding Chairman) ---
 - Full name: Jozef Albert "Jo" Lernout. We call him Jo or Joe.
 - Born 27 April 1948 in Zwevegem, Belgium.
@@ -1939,7 +1955,7 @@ export function BeatriceAgent({
         return `<div class="wa-item"><div class="wa-avatar">${name[0].toUpperCase()}</div><div class="wa-info"><div class="wa-name">${name}</div><div class="wa-meta">${phone}${email ? ` • ${email}` : ''}</div></div></div>`;
       }).join('');
       finalHtml = `<h1>👤 Google Contacts</h1><p style="font-size:12px; color:#64748b; margin-bottom:20px;">Total sync: ${list.length} records.</p>${rows || '<p style="text-align:center; padding:40px; color:#64748b;">No contacts found in your Google account.</p>'}`;
-    } else if (toolName === 'whatsapp_action' || toolName === 'resolve_contact' || toolName === 'read_whatsapp_chats' || toolName === 'send_whatsapp_message' || toolName === 'send_whatsapp_group_message' || toolName === 'get_whatsapp_contacts' || toolName === 'get_whatsapp_groups' || toolName === 'get_whatsapp_message_history' || toolName === 'get_whatsapp_calls' || toolName === 'read_whatsapp_attachment' || toolName === 'send_whatsapp_document') {
+    } else if (toolName === 'whatsapp_action' || toolName === 'resolve_contact' || toolName === 'read_whatsapp_chats' || toolName === 'send_whatsapp_message' || toolName === 'send_whatsapp_group_message' || toolName === 'get_whatsapp_contacts' || toolName === 'get_whatsapp_groups' || toolName === 'get_whatsapp_message_history' || toolName === 'get_whatsapp_calls' || toolName === 'read_whatsapp_attachment' || toolName === 'send_whatsapp_document' || toolName === 'transcribe_whatsapp_audio') {
       const data = result.result || result;
       if (data.chats) {
         const rows = data.chats.map((c: any) => {
@@ -1994,7 +2010,10 @@ export function BeatriceAgent({
         const escapedContent = result.content.replace(/[&<>"']/g, (c: string) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c] || c));
         const fileInfo = `${result.fileName || 'unnamed'} (${((result.fileSize || 0) / 1024).toFixed(1)} KB)`;
         const imageTag = result.base64Content ? `<div style="margin:16px 0; text-align:center;"><img src="${result.base64Content}" style="max-width:100%; max-height:400px; border-radius:12px; border:1px solid #1f2025;" /></div>` : '';
-        finalHtml = `<h1>📎 Attachment Content</h1><p style="font-size:11px; color:#64748b; margin-bottom:16px; text-transform:uppercase; letter-spacing:1px;">${fileInfo} • ${result.mimeType || 'unknown'}</p>${imageTag}<div style="background:#1a1b1f; border:1px solid #1f2025; padding:20px; border-radius:18px; font-family:monospace; font-size:12px; color:#d0a78b; white-space:pre-wrap; overflow-x:auto; max-height:500px; overflow-y:auto;"><pre style="margin:0; font-family:inherit; white-space:pre-wrap; word-break:break-word;">${escapedContent}</pre></div>`;
+        finalHtml = `<h1>📎 Attachment Content</h1><p style="font-size:11px; color:#64748b; margin-bottom:16px; text-transform:uppercase; letter-spacing:1px;">${fileInfo} • ${result.mimeType || 'unknown'}</p>${imageTag}<div style="background:#1a1b1f; border:1px solid #1f2025; padding:20px; border-radius:18px; font-family:monospace; font-size:12px; color:#d0a78b; white-space:pre-wrap; overflow-x:auto; max-height:500px; overflow-y:auto;"><pre style="margin:0; font-family:inherit; white-space:pre-wrap; word-break:break-word;">${escapedContent}</pre></div>${result.mediaUrl ? `<div style="margin-top:12px;"><a href="${result.mediaUrl}" target="_blank" style="display:inline-flex; align-items:center; gap:6px; padding:8px 16px; background:rgba(208,167,139,0.1); border:1px solid rgba(208,167,139,0.2); border-radius:12px; color:#d0a78b; font-size:11px; text-decoration:none; text-transform:uppercase; letter-spacing:0.5px;">🔗 Open Media</a></div>` : ''}`;
+      } else if (toolName === 'transcribe_whatsapp_audio' && result?.transcript) {
+        const escapedTranscript = result.transcript.replace(/[&<>"']/g, (c: string) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c] || c));
+        finalHtml = `<h1>🎤 Audio Transcript</h1><p style="font-size:11px; color:#64748b; margin-bottom:16px; text-transform:uppercase; letter-spacing:1px;">${result.fileName || 'Voice Message'} • ${result.mimeType || 'audio'}</p><div style="background:#1a1b1f; border:1px solid #1f2025; padding:20px; border-radius:18px; font-family:monospace; font-size:12px; color:#e0e0e0; white-space:pre-wrap; overflow-x:auto; max-height:500px; overflow-y:auto;"><pre style="margin:0; font-family:inherit; white-space:pre-wrap; word-break:break-word;">${escapedTranscript}</pre></div>`;
       } else {
         finalHtml = `<h1>🛠️ Tool Output</h1><div style="background:#1a1b1f; border:1px solid #1f2025; padding:20px; border-radius:18px; font-family:monospace; font-size:12px; color:#d0a78b; white-space:pre-wrap; overflow-x:auto;">${JSON.stringify(result, null, 2)}</div>`;
       }
@@ -2992,7 +3011,11 @@ You have three tools for understanding different types of content:
 - **analyze_image**: Use when someone sends you an image, photo, screenshot, or picture. Provide the image URL or base64 data and I'll describe what's in it including any visible text, objects, people, and colors.
 - **read_web_page**: Use to fetch and read the full text content of any web page (articles, docs, blogs). Provide the URL and I'll return the page title and readable content stripped of navigation and ads.
 - **transcribe_audio**: Use when someone sends you a voice message, audio recording, or any audio file. Provide the audio as base64 data and I'll transcribe the speech to text.
-- WhatsApp attachments (documents, images, audio) can already be downloaded and read with read_whatsapp_attachment.
+
+WHATSAPP ATTACHMENTS:
+Messages with media (images, documents, audio, video) include a mediaUrl field pointing to the cached file. Use these tools:
+- **read_whatsapp_attachment**: Download and read any WhatsApp attachment (documents, PDFs, images, text files). Returns extracted text, base64 for images, and a mediaUrl. Images can be passed to analyze_image.
+- **transcribe_whatsapp_audio**: Transcribe voice messages and audio attachments from WhatsApp chats. Provide the chatId and messageId of the audio message. Returns the full text transcript.
 
 MEMORY SYSTEM GUIDANCE:
 You have two memory tools: add_to_memory and search_memory.
@@ -3655,12 +3678,24 @@ ${historyContext}
                 },
                 {
                   name: "read_whatsapp_attachment",
-                  description: "Download and read the content of a file or image attached to a WhatsApp message. Use this when someone sends you a document, PDF, image, or any file in a chat and you need to know what's inside. Returns the extracted text content or a base64 image representation.",
+                  description: "Download and read the content of a file, image, document, or any attachment from a WhatsApp message. Use this when someone sends you a document, PDF, image, audio, or any file in a chat and you need to know what's inside. Returns extracted text content, base64 image representation (for images), and a mediaUrl you can use to view the file. For audio attachments, use transcribe_whatsapp_audio instead.",
                   parameters: {
                     type: Type.OBJECT,
                     properties: {
                       chatId: { type: Type.STRING, description: "The chat JID or contact name/phone number where the attachment was sent." },
                       messageId: { type: Type.STRING, description: "The message ID of the attachment to read." }
+                    },
+                    required: ["chatId", "messageId"]
+                  }
+                },
+                {
+                  name: "transcribe_whatsapp_audio",
+                  description: "Transcribe a voice message or audio attachment from a WhatsApp chat. Use this when someone sends you an audio message, voice note, or audio recording and you need to understand what was said. Returns the full text transcript.",
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      chatId: { type: Type.STRING, description: "The chat JID or contact name/phone number where the audio was sent." },
+                      messageId: { type: Type.STRING, description: "The message ID of the audio message to transcribe." }
                     },
                     required: ["chatId", "messageId"]
                   }
@@ -4470,9 +4505,19 @@ ${historyContext}
                         const resp = await fetch(`/api/whatsapp/read-attachment/${encodeURIComponent(user.uid)}/${encodeURIComponent(args.chatId)}/${encodeURIComponent(args.messageId)}`, { method: 'POST' });
                         const data = await resp.json();
                         if (!resp.ok) throw new Error(data.error || 'Failed to read attachment');
-                        result = { ok: true, content: data.textContent, base64Content: data.base64Content, fileName: data.fileName, mimeType: data.mimeType, fileSize: data.fileSize };
+                        result = { ok: true, content: data.textContent, base64Content: data.base64Content, mediaUrl: data.mediaUrl, fileName: data.fileName, mimeType: data.mimeType, fileSize: data.fileSize };
                       } catch (e: any) {
                         result = { ok: false, error: e.message || 'Failed to read attachment' };
+                      }
+                    } else if (callName === 'transcribe_whatsapp_audio') {
+                      const args = call.args as any;
+                      try {
+                        const resp = await fetch(`/api/whatsapp/transcribe-audio/${encodeURIComponent(user.uid)}/${encodeURIComponent(args.chatId)}/${encodeURIComponent(args.messageId)}`, { method: 'POST' });
+                        const data = await resp.json();
+                        if (!resp.ok) throw new Error(data.error || 'Failed to transcribe audio');
+                        result = { ok: true, transcript: data.transcript, fileName: data.fileName, mimeType: data.mimeType };
+                      } catch (e: any) {
+                        result = { ok: false, error: e.message || 'Failed to transcribe audio' };
                       }
                     } else if (callName === 'send_whatsapp_document') {
                       const args = call.args as any;

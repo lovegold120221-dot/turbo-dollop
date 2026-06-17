@@ -51,6 +51,9 @@ export interface WaRecentMessage {
   isMedia: boolean;
   mediaMimeType?: string;
   mediaCaption?: string;
+  mediaType?: string;
+  mediaFileName?: string;
+  mediaUrl?: string;
 }
 
 export interface WaChatSummary {
@@ -130,6 +133,7 @@ interface WaSession {
   sock: any | null;
   authDir: string;
   dataFile: string;
+  mediaDir: string;
   error: string | null;
   recentMessages: WaRecentMessage[];
   contacts: Record<string, WaContactSummary>;
@@ -142,6 +146,8 @@ interface WaSession {
 const MAX_MESSAGES = 50000;
 
 const PERSIST_MESSAGES = 20000;
+const MEDIA_CACHE_ROOT = process.env.WA_MEDIA_CACHE_DIR || '/data/wa-media';
+const PUBLIC_MEDIA_URL = process.env.BEATRICE_PUBLIC_URL || 'https://whatsapp.eburon.ai';
 const logger = P({ level: process.env.WA_LOG_LEVEL || 'silent' });
 
 function ensureDir(dir: string) {
@@ -425,6 +431,7 @@ export class WhatsAppManager extends EventEmitter {
         sock: null,
         authDir,
         dataFile,
+        mediaDir: path.join(MEDIA_CACHE_ROOT, safeUserId(userId)),
         error: null,
         recentMessages: savedData.recentMessages,
         contacts: savedData.contacts,
@@ -558,8 +565,9 @@ export class WhatsAppManager extends EventEmitter {
 
           const mi = mediaInfo(msg);
           const body = mi.isMedia ? (mi.caption || `[${mi.mediaType || 'media'}]`) : (messageText(msg) || '[media]');
+          const msgId = msg.key?.id || `${chatId}:${Date.now()}`;
           const record: WaRecentMessage = {
-            id: msg.key?.id || `${chatId}:${Date.now()}`,
+            id: msgId,
             chatId,
             from: msg.key?.participant || msg.key?.remoteJid || '',
             fromName: msg.key?.fromMe ? 'Me' : undefined,
@@ -571,8 +579,16 @@ export class WhatsAppManager extends EventEmitter {
             isMedia: mi.isMedia,
             mediaMimeType: mi.mimeType,
             mediaCaption: mi.caption,
+            mediaType: mi.mediaType,
+            mediaFileName: mi.fileName,
+            mediaUrl: mi.isMedia ? `/api/whatsapp/media/${encodeURIComponent(userId)}/${encodeURIComponent(chatId)}/${encodeURIComponent(msgId)}` : undefined,
           };
           entry.recentMessages.unshift(record);
+
+          // Auto-cache media asynchronously
+          if (mi.isMedia && msgId) {
+            this.cacheMediaContent(userId, chatId, msgId).catch(() => {});
+          }
 
           // Emit new message to SSE clients for real-time streaming
           this.emitNewMessage(userId, record);
@@ -637,8 +653,9 @@ export class WhatsAppManager extends EventEmitter {
           if (msg.key?.id) entry.messageById.set(`${chatId}:${msg.key.id}`, msg);
           const mi = mediaInfo(msg);
           const body = mi.isMedia ? (mi.caption || `[${mi.mediaType || 'media'}]`) : (messageText(msg) || '[media]');
+          const msgId = msg.key?.id || `${chatId}:${Date.now()}`;
           const record: WaRecentMessage = {
-            id: msg.key?.id || `${chatId}:${Date.now()}`,
+            id: msgId,
             chatId,
             from: msg.key?.participant || msg.key?.remoteJid || '',
             fromName: msg.key?.fromMe ? 'Me' : undefined,
@@ -650,8 +667,16 @@ export class WhatsAppManager extends EventEmitter {
             isMedia: mi.isMedia,
             mediaMimeType: mi.mimeType,
             mediaCaption: mi.caption,
+            mediaType: mi.mediaType,
+            mediaFileName: mi.fileName,
+            mediaUrl: mi.isMedia ? `/api/whatsapp/media/${encodeURIComponent(userId)}/${encodeURIComponent(chatId)}/${encodeURIComponent(msgId)}` : undefined,
           };
           entry.recentMessages.push(record);
+
+          // Auto-cache media asynchronously
+          if (mi.isMedia && msg.key?.id) {
+            this.cacheMediaContent(userId, chatId, msg.key.id).catch(() => {});
+          }
         }
         entry.recentMessages = entry.recentMessages.slice(0, MAX_MESSAGES);
       });
@@ -854,23 +879,54 @@ export class WhatsAppManager extends EventEmitter {
     return { chatId, messageId: msgId };
   }
 
-  async downloadAttachmentContent(userId: string, chatId: string, messageId: string): Promise<{ buffer: Buffer; mimeType: string; fileName?: string } | null> {
+  getMediaCachePath(userId: string, chatId: string, messageId: string): string {
+    const entry = this.sessions.get(userId);
+    if (!entry) return '';
+    const safeChat = chatId.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const dir = path.join(entry.mediaDir, safeChat);
+    ensureDir(dir);
+    return path.join(dir, messageId);
+  }
+
+  async cacheMediaContent(userId: string, chatId: string, messageId: string): Promise<{ buffer: Buffer; mimeType: string; fileName?: string; cachePath: string } | null> {
+    const cachePath = this.getMediaCachePath(userId, chatId, messageId);
+
+    // Check cache first
+    if (fs.existsSync(cachePath + '.meta')) {
+      try {
+        const meta = JSON.parse(fs.readFileSync(cachePath + '.meta', 'utf-8'));
+        const buffer = fs.readFileSync(cachePath + '.data');
+        return { buffer, mimeType: meta.mimeType, fileName: meta.fileName, cachePath };
+      } catch {}
+    }
+
     const msg = this.getMessageById(userId, chatId, messageId);
     if (!msg) return null;
     const mediaMsg = msg.message?.imageMessage || msg.message?.videoMessage || msg.message?.audioMessage || msg.message?.documentMessage || msg.message?.stickerMessage;
     if (!mediaMsg) return null;
     const mediaType = msg.message?.imageMessage ? 'image' : msg.message?.videoMessage ? 'video' : msg.message?.audioMessage ? 'audio' : msg.message?.documentMessage ? 'document' : 'sticker';
     const mimeType = mediaMsg.mimetype || 'application/octet-stream';
-    const fileName = mediaMsg.fileName || (mediaType === 'image' ? 'image' : mediaType === 'video' ? 'video' : mediaType === 'audio' ? 'audio' : 'file');
+    const fileName = mediaMsg.fileName || (mediaType === 'image' ? `image.${(mediaMsg.mimetype || 'jpeg').split('/').pop() || 'jpg'}` : mediaType === 'video' ? `video.${(mediaMsg.mimetype || 'mp4').split('/').pop() || 'mp4'}` : mediaType === 'audio' ? `audio.${(mediaMsg.mimetype || 'ogg').split('/').pop() || 'ogg'}` : mediaType === 'document' ? mediaMsg.fileName || 'document' : 'sticker.webp');
     try {
       const stream = await downloadContentFromMessage(mediaMsg, mediaType as any);
       if (!stream) return null;
       const chunks: Buffer[] = [];
       for await (const chunk of stream) chunks.push(Buffer.from(chunk));
-      return { buffer: Buffer.concat(chunks), mimeType, fileName };
+      const buffer = Buffer.concat(chunks);
+
+      // Write cache files
+      fs.writeFileSync(cachePath + '.data', buffer);
+      fs.writeFileSync(cachePath + '.meta', JSON.stringify({ mimeType, fileName, mediaType }));
+      return { buffer, mimeType, fileName, cachePath };
     } catch {
       return null;
     }
+  }
+
+  async downloadAttachmentContent(userId: string, chatId: string, messageId: string): Promise<{ buffer: Buffer; mimeType: string; fileName?: string } | null> {
+    const cached = await this.cacheMediaContent(userId, chatId, messageId);
+    if (!cached) return null;
+    return { buffer: cached.buffer, mimeType: cached.mimeType, fileName: cached.fileName };
   }
 
   async sendDocumentBuffer(userId: string, to: string, buffer: Buffer, fileName: string, caption?: string): Promise<{ chatId: string; messageId?: string } | null> {
@@ -919,6 +975,7 @@ export class WhatsAppManager extends EventEmitter {
         sock: null,
         authDir,
         dataFile,
+        mediaDir: path.join(MEDIA_CACHE_ROOT, safeUserId(userId)),
         error: null,
         recentMessages: savedData.recentMessages,
         contacts: savedData.contacts,

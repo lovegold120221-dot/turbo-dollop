@@ -5,6 +5,7 @@ export interface FileExtractResult {
   mimeType: string;
   fileName?: string;
   fileSize: number;
+  mediaUrl?: string;
   error?: string;
 }
 
@@ -21,52 +22,50 @@ const TEXT_EXTENSIONS = new Set([
   'cpp', 'h', 'hpp', 'go', 'rs', 'swift', 'kt', 'gradle', 'properties',
 ]);
 
-export function extractFileContent(buffer: Buffer, mimeType: string, fileName?: string): FileExtractResult {
+export function extractFileContent(buffer: Buffer, mimeType: string, fileName?: string, mediaUrl?: string): FileExtractResult {
   const mime = mimeType || 'application/octet-stream';
   const ext = fileName?.split('.').pop()?.toLowerCase();
+  const base: Pick<FileExtractResult, 'mimeType' | 'fileName' | 'fileSize' | 'mediaUrl'> = { mimeType: mime, fileName, fileSize: buffer.length, mediaUrl };
 
   if (TEXT_MIMES.has(mime) || (ext && TEXT_EXTENSIONS.has(ext))) {
     const text = buffer.toString('utf-8');
-    return { success: true, textContent: text, mimeType: mime, fileName, fileSize: buffer.length };
+    return { ...base, success: true, textContent: text };
   }
 
   if (mime.startsWith('image/')) {
-    const base64 = buffer.toString('base64');
-    return { success: true, base64Content: `data:${mime};base64,${base64}`, mimeType: mime, fileName, fileSize: buffer.length };
+    const b64 = buffer.toString('base64');
+    return { ...base, success: true, base64Content: `data:${mime};base64,${b64}` };
   }
 
   if (mime === 'application/pdf' || ext === 'pdf') {
     const raw = buffer.toString('utf-8');
     const cleaned = raw.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, ' ').replace(/\s+/g, ' ').trim();
     if (cleaned.length > 50) {
-      return { success: true, textContent: cleaned.substring(0, 100000), mimeType: mime, fileName, fileSize: buffer.length };
+      return { ...base, success: true, textContent: cleaned.substring(0, 100000) };
     }
     return {
-      success: true,
-      textContent: `[PDF document: ${fileName || 'unnamed'}, ${(buffer.length / 1024).toFixed(1)} KB — text extraction unavailable. The user can see this file in WhatsApp.]`,
-      mimeType: mime, fileName, fileSize: buffer.length,
+      ...base, success: true,
+      textContent: `[PDF document: ${fileName || 'unnamed'}, ${(buffer.length / 1024).toFixed(1)} KB — plain text extraction unavailable. You can view it at ${mediaUrl || 'the media link'} or ask the user to open it in WhatsApp.]`,
     };
   }
 
   if (mime.startsWith('audio/')) {
+    const b64 = buffer.toString('base64');
     return {
-      success: true,
-      textContent: `[Audio file: ${fileName || 'unnamed'}, ${(buffer.length / 1024).toFixed(1)} KB — audio transcription not available.]`,
-      mimeType: mime, fileName, fileSize: buffer.length,
+      ...base, success: true, base64Content: `data:${mime};base64,${b64}`,
+      textContent: `[Audio file: ${fileName || 'unnamed'}, ${(buffer.length / 1024).toFixed(1)} KB — available for transcription. Use the transcribe_whatsapp_audio tool with this messageId to get a text transcript.]`,
     };
   }
 
   if (mime.startsWith('video/')) {
     return {
-      success: true,
-      textContent: `[Video file: ${fileName || 'unnamed'}, ${(buffer.length / 1024).toFixed(1)} KB — video content extraction not available.]`,
-      mimeType: mime, fileName, fileSize: buffer.length,
+      ...base, success: true,
+      textContent: `[Video file: ${fileName || 'unnamed'}, ${(buffer.length / 1024).toFixed(1)} KB — video content extraction not available. View at ${mediaUrl || 'the media link'} if needed.]`,
     };
   }
 
   return {
-    success: true,
-    textContent: `[File: ${fileName || 'unnamed'}, type: ${mime}, size: ${(buffer.length / 1024).toFixed(1)} KB — content extraction not available for this file type.]`,
-    mimeType: mime, fileName, fileSize: buffer.length,
+    ...base, success: true,
+    textContent: `[File: ${fileName || 'unnamed'}, type: ${mime}, size: ${(buffer.length / 1024).toFixed(1)} KB — available at ${mediaUrl || 'the media link'}.]`,
   };
 }

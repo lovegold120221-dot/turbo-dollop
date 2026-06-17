@@ -591,7 +591,23 @@ const getMsg = (e: any) => e?.message || String(e);
   app.get('/api/whatsapp/media/:userId/:chatId/:messageId', async (req, res) => {
     try {
       const { userId, chatId, messageId } = req.params;
-      const sock = waManager!.getClient(userId);
+      if (!waManager) { res.status(503).json({ error: 'WhatsApp not available' }); return; }
+
+      // Serve from cache first
+      const cachePath = waManager.getMediaCachePath(userId, chatId, messageId);
+      if (fs.existsSync(cachePath + '.data') && fs.existsSync(cachePath + '.meta')) {
+        try {
+          const meta = JSON.parse(fs.readFileSync(cachePath + '.meta', 'utf-8'));
+          const mime = meta.mimeType || 'application/octet-stream';
+          res.setHeader('Content-Type', mime);
+          res.setHeader('X-Cache', 'HIT');
+          res.sendFile(cachePath + '.data');
+          return;
+        } catch {}
+      }
+
+      // Fallback: stream from WhatsApp CDN
+      const sock = waManager.getClient(userId);
       if (!sock) { res.status(404).json({ error: 'Not connected' }); return; }
       const msg = (waManager as any).getMessageById?.(userId, chatId, messageId);
       if (!msg) { res.status(404).json({ error: 'Message not found' }); return; }
@@ -603,12 +619,26 @@ const getMsg = (e: any) => e?.message || String(e);
         if (!stream) { res.status(404).json({ error: 'Media not available' }); return; }
         const mime = mediaMsg.mimetype || 'application/octet-stream';
         res.setHeader('Content-Type', mime);
+        res.setHeader('X-Cache', 'MISS');
+
+        // Collect stream and cache it for next time
+        const chunks: Buffer[] = [];
+        stream.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
         stream.on('error', (streamErr: Error) => {
           console.error(`Media stream error for ${userId}/${chatId}/${messageId}:`, streamErr.message);
           if (!res.headersSent) res.status(502).json({ error: 'Media stream failed' });
           else res.end();
         });
-        stream.pipe(res);
+        stream.on('end', () => {
+          const buffer = Buffer.concat(chunks);
+          // Cache asynchronously
+          try {
+            fs.writeFileSync(cachePath + '.data', buffer);
+            fs.writeFileSync(cachePath + '.meta', JSON.stringify({ mimeType: mime, mediaType }));
+          } catch {}
+          res.end(buffer);
+        });
+        stream.resume();
       } catch (dlErr: any) {
         const msg_lower = (dlErr.message || '').toLowerCase();
         if (msg_lower.includes('expired') || msg_lower.includes('404')) {
@@ -628,9 +658,29 @@ const getMsg = (e: any) => e?.message || String(e);
       if (!waManager) { res.status(503).json({ error: 'WhatsApp not available' }); return; }
       const result = await waManager.downloadAttachmentContent(userId, chatId, messageId);
       if (!result) { res.status(404).json({ error: 'Attachment not found or expired' }); return; }
+      const mediaUrl = `/api/whatsapp/media/${encodeURIComponent(userId)}/${encodeURIComponent(chatId)}/${encodeURIComponent(messageId)}`;
       const { extractFileContent } = await import('./file-extractor');
-      const extracted = extractFileContent(result.buffer, result.mimeType, result.fileName);
+      const extracted = extractFileContent(result.buffer, result.mimeType, result.fileName, mediaUrl);
       res.json(extracted);
+    } catch (err: any) {
+      res.status(500).json({ error: getMsg(err) });
+    }
+  });
+
+  app.post('/api/whatsapp/transcribe-audio/:userId/:chatId/:messageId', async (req, res) => {
+    try {
+      const { userId, chatId, messageId } = req.params;
+      if (!waManager) { res.status(503).json({ error: 'WhatsApp not available' }); return; }
+      const result = await waManager.downloadAttachmentContent(userId, chatId, messageId);
+      if (!result) { res.status(404).json({ error: 'Attachment not found or expired' }); return; }
+      if (!result.mimeType.startsWith('audio/')) { res.status(400).json({ error: 'Not an audio file' }); return; }
+      const audioBase64 = result.buffer.toString('base64');
+      const transResult = await transcribeEburonAudio({
+        audioData: audioBase64,
+        mimeType: result.mimeType,
+        prompt: req.body.prompt || 'Transcribe the audio content exactly as spoken. Include speaker labels if distinguishable.',
+      });
+      res.json({ ok: true, transcript: transResult.text, mimeType: result.mimeType, fileName: result.fileName });
     } catch (err: any) {
       res.status(500).json({ error: getMsg(err) });
     }
