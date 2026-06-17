@@ -581,7 +581,7 @@ export function ProfilePage({
                   id="context-size-slider"
                   type="range"
                   min="0"
-                  max="50"
+                  max="100"
                   step="1"
                   value={contextSize}
                   onChange={(e) => setContextSize(parseInt(e.target.value))}
